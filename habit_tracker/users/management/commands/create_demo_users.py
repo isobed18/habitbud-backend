@@ -13,6 +13,11 @@ class Command(BaseCommand):
     help = 'Create demo users with rich history, streaks, and achievements'
 
     def handle(self, *args, **kwargs):
+        # CRITICAL: Populate challenges first to ensure Items exist
+        from django.core.management import call_command
+        self.stdout.write(self.style.WARNING('Running populate_challenges first to ensure Items exist...'))
+        call_command('populate_challenges')
+        
         # 1. Define Demo Users
         demo_users_data = [
             {
