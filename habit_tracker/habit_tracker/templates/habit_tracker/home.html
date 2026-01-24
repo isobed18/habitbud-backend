@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habit Tracker - Ana Sayfa</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .nav-links {
+            margin-top: 20px;
+        }
+        .nav-links a {
+            color: #007bff;
+            text-decoration: none;
+            margin-right: 10px;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        #serverTime {
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #serverTimeMessage {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Alışkanlık Takipçisi Uygulamasına Hoş Geldiniz!</h1>
+        <p>Bu, ana sayfadır.</p>
+        <div class="nav-links">
+            {% if user.is_authenticated %}
+                <a href="{% url 'logout' %}">Çıkış Yap</a>
+            {% else %}
+                <a href="{% url 'register' %}">Kayıt Ol</a> | <a href="{% url 'login' %}">Giriş Yap</a>
+            {% endif %}
+        </div>
+        
+        {% if user.is_authenticated %}
+            <button onclick="fetchServerTime()">Server Zamanını Göster</button>
+            
+            <a href="{% url 'add_habit' %}">
+                <button>Habit Ekle</button>
+            </a>
+            <h1>Devam Eden Alışkanlıklar</h1>
+            {% if habits %}
+            <ul>
+                {% for habit in habits %}
+            <li>
+                {{ habit.name }} - Sayı: {{ habit.count }} / {{habit.target_count}}
+                <form method="post" action="{% url 'increment_habit' habit.id %}">
+                    {% csrf_token %}
+                    <button type="submit">Artır</button>
+                </form>
+            </li>
+            {% endfor %}
+            </ul>
+            {% else %}
+                <p>Henüz bir alışkanlığınız yok.</p>
+            {% endif %}
+
+
+
+
+            <p id="serverTimeMessage"></p>
+        {% else %}
+            <p>Server zamanını görmek için lütfen <a href="{% url 'login' %}">giriş yapın</a>.</p>
+        {% endif %}
+    </div>
+
+  
+    <script>
+        function fetchServerTime() {
+            fetch('/get_server_time/')
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else if (response.status === 403) {
+                        throw new Error('Kimlik doğrulama gerekli');
+                    } else {
+                        throw new Error('Sunucu hatası');
+                    }
+                })
+                .then(data => {
+                    console.log('Server yanıtı:', data);
+                    if (data.message) {
+                        document.getElementById('serverTimeMessage').textContent = data.message;
+                    } else {
+                        document.getElementById('serverTimeMessage').textContent = 'Beklenmeyen yanıt formatı';
+                    }
+                })
+                .catch(error => {
+                    console.error('Hata:', error);
+                    document.getElementById('serverTimeMessage').textContent = 'Hata: ' + error.message;
+                });
+        }
+    </script>
+</body>
+</html>

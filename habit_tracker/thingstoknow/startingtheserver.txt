@@ -1,0 +1,4 @@
+python manage.py runserver 8000 -> starts the server at 8000 port
+python manage.py runserver 0.0.0.0:8000 -> allows all IPs in Wifi
+ALLOWED_HOSTS = ["127.0.0.1", "localhost","192.168.1.33"] -> "127.0.0.1", "localhost" when working on local
+192.168.1.33(ipv4) when working on LAN
