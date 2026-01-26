@@ -2,6 +2,8 @@
 
 A next-generation habit tracking application that combines social accountability with AI-powered verification. Inspired by BeReal and Snapchat's authentic engagement model, HabitBud makes habit building a social, verified, and gamified experience.
 
+**Frontend Repository**: [HabitBud Frontend](https://github.com/isobed18/habitbud-frontend)
+
 ## 🌟 What Makes HabitBud Different
 
 Unlike traditional habit trackers, HabitBud focuses on **authenticity and social accountability**:
@@ -86,8 +88,8 @@ Beyond verification, IO Intelligence acts as a personal growth companion:
 
 - Python 3.10+
 - SQLite3 (included with Python) - PostgreSQL is optional for production
-- Redis 6+ (for WebSocket/Channels) - Optional for basic functionality
-- IO.net API Key ([Get one here](https://io.net))
+- Redis 6+ (Required for **Real-time Chat**, **Stories**, and **Proof Verification** updates)
+- IO Intelligence API Key ([Get one here](https://io.net))
 
 
 ## 🛠️ Manual Installation
@@ -229,7 +231,7 @@ ipconfig
 # If you are not in the habit_tracker directory:
 cd habit_tracker
 
-# Start Redis (in separate terminal - Optional, required for WebSocket only)
+# Start Redis (REQUIRED for real-time features: Chat, Stories, and Proofs)
 redis-server
 
 # Start Django server
@@ -248,7 +250,7 @@ For real-time chat and notifications:
 daphne -b 0.0.0.0 -p 8001 habit_tracker.asgi:application
 ```
 
-**Note:** If you are not using WebSocket, you can skip this step. It is not required for normal HTTP APIs.
+**Note:** Redis is essential for the core social experience (Real-time Chat, Stories, and Proof notifications). If you only want to use the basic HTTP habit tracking APIs without social interaction, you can skip this step.
 
 ## 🧪 Testing the AI Features
 
@@ -335,6 +337,7 @@ Full API documentation is available at:
 
 ### Tech Stack
 - **Backend**: Django 4.2 + Django REST Framework
+- **Frontend**: [HabitBud Frontend](https://github.com/isobed18/habitbud-frontend)
 - **Database**: PostgreSQL (with UUID primary keys)
 - **Real-time**: Django Channels + Redis
 - **AI Engine**: IO Intelligence (Llama 4, Mistral models)
@@ -422,8 +425,8 @@ MIT License - See LICENSE file for details
 
 ## 📧 Contact
 
-For questions or collaboration: [Your Contact Info]
+For questions or collaboration: [ishakbediryorganci@gmail.com](mailto:ishakbediryorganci@gmail.com) or GitHub: [isobed18](https://github.com/isobed18)
 
 ---
 
-**Built with ❤️ using Django, IO.net, and a commitment to authentic habit building**
+**Built with ❤️ using Django, IO Intelligence, and a commitment to authentic habit building**

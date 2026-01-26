@@ -4,4 +4,3 @@ db.sqlite3
 myenv/
 .env
 media/
-media/
