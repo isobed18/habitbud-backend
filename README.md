@@ -79,11 +79,85 @@ result = IONetService.verify_habit_proof(
 ## 📋 Prerequisites
 
 - Python 3.10+
-- PostgreSQL 13+
-- Redis 6+ (for WebSocket/Channels)
+- SQLite3 (included with Python) - PostgreSQL is optional for production
+- Redis 6+ (for WebSocket/Channels) - Optional for basic functionality
 - IO.net API Key ([Get one here](https://io.net))
 
-## 🛠️ Installation
+## 🐳 Quick Start with Docker (Recommended)
+
+En hızlı kurulum yöntemi! Tek komutla tüm sistem hazır:
+
+```bash
+# Repository'yi klonlayın
+git clone https://github.com/isobed18/habitbud-backend.git
+cd habitbud-backend/habit_tracker
+
+# İLK KURULUM: Cache olmadan build et ve başlat (önerilen)
+docker-compose build --no-cache
+docker-compose up -d
+
+# VEYA tek komutla (cache olmadan):
+docker-compose build --no-cache && docker-compose up -d
+```
+
+**İlk Kurulum Sonrası (Sonraki Kullanımlar):**
+```bash
+# Container'ları başlat (cache kullanır, daha hızlı)
+docker-compose up -d
+
+# Veya build ile birlikte (değişiklik varsa):
+docker-compose up --build -d
+```
+
+Bu komutlar otomatik olarak:
+- ✅ Redis container'ını başlatır
+- ✅ Django uygulamasını build eder ve başlatır
+- ✅ Database migrations'ları çalıştırır
+- ✅ Challenge templates ve items'ları oluşturur
+- ✅ Demo kullanıcıları oluşturur
+- ✅ Server'ı `http://localhost:8000` adresinde başlatır
+
+**Demo Kullanıcılar (Otomatik Oluşturulur):**
+
+| Kullanıcı Adı | Şifre | Email | Açıklama |
+|--------------|-------|-------|----------|
+| `aslan_berk` | `password123` | berk@example.com | 45 günlük koşu serisi, disiplin odaklı |
+| `zeynep_enerji` | `password123` | zeynep@example.com | 60 günlük su içme serisi, sağlık odaklı |
+| `demir_disiplin` | `password123` | demir@example.com | 100 günlük kod yazma serisi, geliştirici |
+
+**Docker Komutları:**
+```bash
+# Server'ı başlat (background)
+docker-compose up -d
+
+# Logları görüntüle
+docker-compose logs -f web
+
+# Tüm logları görüntüle
+docker-compose logs -f
+
+# Server'ı durdur
+docker-compose down
+
+# Server'ı durdur ve volume'ları sil (tamamen temizle)
+docker-compose down -v
+
+# Container durumunu kontrol et
+docker-compose ps
+
+# Demo kullanıcıları oluşturmadan başlatmak için:
+# docker-compose.yml'de CREATE_DEMO_USERS=false yapın
+```
+
+**Önemli Notlar:**
+- **İlk kurulum:** `--no-cache` kullanın, böylece tüm dependencies (pytz dahil) doğru şekilde yüklenir
+- **Sonraki kullanımlar:** Cache kullanarak daha hızlı başlatabilirsiniz
+- İlk build işlemi 1-2 dakika sürebilir (dependencies indirme)
+- Sonraki başlatmalar çok daha hızlıdır (5-10 saniye)
+
+---
+
+## 🛠️ Manual Installation
 
 ### 1. Clone the Repository
 ```bash
@@ -92,7 +166,13 @@ cd habitbud-backend/habit_tracker
 ```
 
 ### 2. Create Virtual Environment
+
+**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+
 ```bash
+# Eğer habit_tracker dizininde değilseniz:
+cd habit_tracker
+
 python -m venv venv
 
 # Windows
@@ -103,23 +183,39 @@ source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
+
+**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+
 ```bash
+# Eğer habit_tracker dizininde değilseniz:
+cd habit_tracker
+
 pip install -r requirements.txt
 ```
 
 ### 4. Environment Configuration
+
+**ÖNEMLİ: IPv4 Adresinizi Bulun**
+
+Windows'ta IPv4 adresinizi bulmak için:
+```bash
+ipconfig
+```
+Çıktıda "IPv4 Address" satırını bulun (örnek: `192.168.1.9`). Bu adresi kullanacaksınız.
+
 Create a `.env` file in the `habit_tracker` directory:
 
 ```env
 # Django Settings
 SECRET_KEY=your-secret-key-here
 DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
+# IPv4 adresinizi buraya ekleyin (ipconfig ile bulduğunuz adres)
+ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.9
 
-# Database
-DATABASE_URL=postgresql://username:password@localhost:5432/habitbud
+# Database (SQLite kullanılıyorsa bu satırı atlayabilirsiniz)
+# DATABASE_URL=postgresql://username:password@localhost:5432/habitbud
 
-# Redis (for WebSockets)
+# Redis (for WebSockets - Optional)
 REDIS_URL=redis://localhost:6379/0
 
 # IO.net API
@@ -131,47 +227,110 @@ JWT_SECRET_KEY=your-jwt-secret
 JWT_ALGORITHM=HS256
 ```
 
-### 5. Database Setup
-```bash
-# Create PostgreSQL database
-createdb habitbud
+**Not:** `.env` dosyası oluşturmanız zorunlu değildir. Proje varsayılan olarak SQLite kullanır ve çalışır.
 
-# Run migrations
+### 5. Database Setup
+
+**Not:** Proje varsayılan olarak SQLite kullanır. PostgreSQL kurulumu opsiyoneldir.
+
+**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+
+```bash
+# Eğer habit_tracker dizininde değilseniz:
+cd habit_tracker
+
+# Run migrations (SQLite otomatik oluşturulur)
 python manage.py migrate
 
-# Create demo users (optional)
-python manage.py create_demo_users
-
-# Populate challenge templates (optional)
+# Populate challenge templates (optional - ÖNCE bu çalıştırılmalı)
+# Bu komut item'ları ve challenge template'lerini oluşturur
 python manage.py populate_challenges
+
+# Create demo users (optional - SONRA bu çalıştırılmalı)
+# Demo kullanıcılar item'lara ihtiyaç duyar, bu yüzden önce populate_challenges çalıştırılmalı
+python manage.py create_demo_users
+```
+
+**Demo Kullanıcı Bilgileri:**
+
+| Kullanıcı Adı | Şifre | Email | Açıklama |
+|--------------|-------|-------|----------|
+| `aslan_berk` | `password123` | berk@example.com | 45 günlük koşu serisi, disiplin odaklı |
+| `zeynep_enerji` | `password123` | zeynep@example.com | 60 günlük su içme serisi, sağlık odaklı |
+| `demir_disiplin` | `password123` | demir@example.com | 100 günlük kod yazma serisi, geliştirici |
+
+**PostgreSQL kullanmak isterseniz:**
+```bash
+# PostgreSQL database oluştur
+createdb habitbud
+
+# settings.py'de DATABASE_URL'i kullanacak şekilde yapılandırın
 ```
 
 ### 6. Create Superuser
+
+**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+
 ```bash
+# Eğer habit_tracker dizininde değilseniz:
+cd habit_tracker
+
 python manage.py createsuperuser
 ```
 
 ### 7. Run Development Server
+
+**ÖNEMLİ: IPv4 Adresinizi Kullanın**
+
+Önce IPv4 adresinizi bulun:
 ```bash
-# Start Redis (in separate terminal)
+# Windows
+ipconfig
+
+# Çıktıda "IPv4 Address" satırını bulun (örnek: 192.168.1.9)
+```
+
+**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+
+```bash
+# Eğer habit_tracker dizininde değilseniz:
+cd habit_tracker
+
+# Start Redis (in separate terminal - Optional, sadece WebSocket için gerekli)
 redis-server
 
 # Start Django server
+# 0.0.0.0 tüm ağ arayüzlerinde dinler, böylece telefonunuzdan da erişebilirsiniz
 python manage.py runserver 0.0.0.0:8000
 ```
+
+**Erişim URL'leri:**
+- Yerel: `http://localhost:8000` veya `http://127.0.0.1:8000`
+- Ağdan (telefon/başka bilgisayar): `http://192.168.1.9:8000` (IPv4 adresinizi kullanın)
 
 ### 8. Run WebSocket Server (Optional)
 For real-time chat and notifications:
 ```bash
+# WebSocket için Daphne kullanın (normal runserver WebSocket desteklemez)
 daphne -b 0.0.0.0 -p 8001 habit_tracker.asgi:application
 ```
 
+**Not:** WebSocket kullanmıyorsanız bu adımı atlayabilirsiniz. Normal HTTP API'ler için gerekli değildir.
+
 ## 🧪 Testing the AI Features
+
+**Not:** `localhost` yerine IPv4 adresinizi kullanabilirsiniz (örnek: `192.168.1.9`)
 
 ### Test Proof Verification
 ```bash
-# Using the API
+# Using the API (localhost yerine IPv4 adresinizi de kullanabilirsiniz)
 curl -X POST http://localhost:8000/chat/proof/ai/ \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -F "habit_id=HABIT_UUID" \
+  -F "proof_image=@/path/to/photo.jpg"
+
+# Veya IPv4 adresi ile:
+curl -X POST http://192.168.1.9:8000/chat/proof/ai/ \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F "habit_id=HABIT_UUID" \
   -F "proof_image=@/path/to/photo.jpg"
@@ -186,14 +345,25 @@ curl -X POST http://localhost:8000/chat/ai-agent/ \
     "objective": "Create 3 habits for becoming a better developer",
     "instructions": "Make them actionable and specific"
   }'
+
+# Veya IPv4 adresi ile:
+curl -X POST http://192.168.1.9:8000/chat/ai-agent/ \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "objective": "Create 3 habits for becoming a better developer",
+    "instructions": "Make them actionable and specific"
+  }'
 ```
 
 ## 📱 API Documentation
 
 Full API documentation is available at:
-- **Swagger UI**: `http://localhost:8000/api/docs/`
-- **ReDoc**: `http://localhost:8000/api/redoc/`
+- **Swagger UI**: `http://localhost:8000/api/docs/` veya `http://192.168.1.9:8000/api/docs/` (IPv4 adresinizi kullanın)
+- **ReDoc**: `http://localhost:8000/api/redoc/` veya `http://192.168.1.9:8000/api/redoc/`
 - **Markdown**: See `API_DOCUMENTATION.md`
+
+**Not:** Telefon veya başka bir cihazdan erişmek için `localhost` yerine IPv4 adresinizi kullanın.
 
 ### Key Endpoints
 

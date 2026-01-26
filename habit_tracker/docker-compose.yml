@@ -1,0 +1,46 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: habitbud_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - habitbud_network
+
+  web:
+    build: .
+    container_name: habitbud_web
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - media_data:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - ALLOWED_HOSTS=*
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CREATE_DEMO_USERS=true
+      - IONET_API_KEY=io-v2-eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJvd25lciI6IjYwMjIxMzkyLTFiOTUtNDg2YS04NmI0LWMzYTVjZjAxMmRjYSIsImV4cCI6NDkyMjU2NDMwMX0.gJ57fG0fMF7x1TI9LysJO8xpUKo9LLIAH_4RpkXveXNG_Dye57LWhmUjHLUxUy5W15RvXlXlWwdcEMXPEFnClQ
+      - IONET_BASE_URL=https://api.intelligence.io.solutions/api/v1
+      - AI_VERIFICATION_ENABLED=True
+    depends_on:
+      - redis
+    networks:
+      - habitbud_network
+
+volumes:
+  redis_data:
+  media_data:
+
+networks:
+  habitbud_network:
+    driver: bridge
+

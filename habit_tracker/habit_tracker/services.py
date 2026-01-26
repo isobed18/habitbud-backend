@@ -2,16 +2,31 @@ import os
 import base64
 import json
 import logging
+from pathlib import Path
+from dotenv import load_dotenv
 from openai import OpenAI
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# Ensure env vars are loaded even if services is imported independently
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+
 class IONetService:
     def __init__(self):
-        self.api_key = os.getenv('IONET_API_KEY')
-        # Use the provided URL as default if env var is missing or empty
-        self.base_url = os.getenv('IONET_BASE_URL') or "https://api.intelligence.io.solutions/api/v1"
+        # Try both common environment variable names
+        self.api_key = os.getenv('IONET_API_KEY') or os.getenv('IOINTELLIGENCE_API_KEY')
+        self.base_url = os.getenv('IONET_BASE_URL') or os.getenv('IOINTELLIGENCE_BASE_URL') or "https://api.intelligence.io.solutions/api/v1"
+        
+        # Diagnostic logging
+        if not self.api_key:
+             logger.warning("IONET_API_KEY is missing from environment.")
+        elif 'placeholder' in self.api_key:
+             logger.warning("IONET_API_KEY contains 'placeholder'.")
+        else:
+             logger.info(f"IONET_API_KEY loaded: {self.api_key[:5]}...")
+
         self.model = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8" 
         
         # Check if api_key is present and not the placeholder
