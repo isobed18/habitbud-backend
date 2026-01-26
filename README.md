@@ -6,18 +6,18 @@ A next-generation habit tracking application that combines social accountability
 
 Unlike traditional habit trackers, HabitBud focuses on **authenticity and social accountability**:
 
-- **📸 Proof-Based Verification**: Submit photo proof of your habits (inspired by BeReal's authenticity)
-- **🤖 AI-Powered Validation**: IO.net's Llama 4 Maverick model verifies your habit completion photos
+- **📸 Proof-Based Verification**: Submit photo proof of your habits (verified by IO Intelligence)
+- **🤖 AI-Powered Validation**: IO Intelligence's Llama 4 Maverick model verifies your habit completion photos
 - **👥 Social Accountability**: Friends verify each other's habits, building trust and motivation
 - **📱 Stories & Engagement**: Share your progress through 24-hour stories (Snapchat-inspired)
 - **🎮 Gamification**: XP, levels, streaks, and achievements keep you motivated
 - **🏆 Challenges**: Solo and duo challenges with friends
-- **🔔 Smart Reminders**: AI agent creates personalized daily reminders
+- **🔔 Smart Reminders**: IO Intelligence agent creates personalized daily reminders
 
 ## 🚀 Core Features
 
 ### 1. Dual Verification System
-- **AI Verification**: Submit proof photos analyzed by IO.net's vision models
+- **AI Verification**: Submit proof photos analyzed by IO Intelligence vision models
 - **Social Verification**: Friends approve your habit completions
 - **Hybrid Mode**: Combine both for maximum accountability
 
@@ -27,7 +27,7 @@ Unlike traditional habit trackers, HabitBud focuses on **authenticity and social
 - **Real-time Chat**: Message friends, share proof images, request verification
 - **Streaks**: Maintain verification streaks with friends
 
-### 3. AI Agent (Powered by IO.net)
+### 3. AI Coach & Agent (Powered by IO Intelligence)
 - **Habit Suggestions**: AI recommends personalized habits based on your goals
 - **Smart Reminders**: Schedule recurring notifications for habit practice
 - **Coaching**: Get motivational advice and tips from the AI coach
@@ -45,36 +45,42 @@ Unlike traditional habit trackers, HabitBud focuses on **authenticity and social
 - **Duo Challenges**: Partner with a friend for mutual accountability
 - **Rewards**: Earn exclusive items and XP bonuses
 
-## 🧠 IO.net Integration
+## 🧠 Powered by IO Intelligence
 
-HabitBud leverages **IO.net's decentralized GPU network** for AI capabilities:
+HabitBud is built on **IO Intelligence (powered by IO.net)**, leveraging a decentralized GPU network to provide state-of-the-art AI capabilities that make authentic habit tracking possible.
 
-### Primary Use Case: Proof Verification
+### 🛡️ The AI Proof System (Core Differentiator)
+Unlike other habit trackers that rely on simple button clicks, HabitBud enforces **Authenticity Through Proof**.
+- **Mandatory Verification**: Users are required to submit photo proof to verify habit completion.
+- **Vision-Language Model**: Powered by `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8`, our AI judge analyzes proof photos in real-time.
+- **Incorruptible Judge**: The AI detects fake proofs, ensures the photo matches the habit description, and provides habit-specific motivational feedback.
+- **XP Rewards**: Successful AI verification grants 20 XP and starts your AI verification streak.
+
 ```python
-# When user submits a habit proof photo
+# The engine behind our mandatory verification
 result = IONetService.verify_habit_proof(
     image=proof_image,
-    habit_name="Morning Run",
+    habit_name="Morning Workspace Cleanup",
     username="john_doe"
 )
-# Returns: {"verified": true, "confidence": 0.95, "motivational_message": "..."}
+# Returns: {"verified": true, "confidence": 0.98, "motivational_message": "Clean desk, clear mind! Great start, @john_doe!"}
 ```
 
-**Model Used**: `meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8`
-- Vision-language model for image understanding
-- Analyzes proof photos for authenticity
-- Provides motivational feedback
-- Prevents gaming the system with fake proofs
+### 🤖 Personal AI Coach & Agent
+Beyond verification, IO Intelligence acts as a personal growth companion:
+- **AI Coach**: Uses `mistralai/Mistral-Nemo-Instruct-2407` to provide context-aware coaching. It analyzes your last 7 days of performance and chat history to give personalized advice.
+- **Unified AI Agent**: A custom agent capable of **Actionable Intelligence**. It doesn't just talk; it can directly:
+    - Propose and **Create Habits** in your account.
+    - **Schedule Reminders** based on your routine.
+    - Send notifications and provide habit insights.
 
-### Secondary Use Cases:
-1. **AI Coach**: Personalized habit advice using `mistralai/Mistral-Nemo-Instruct-2407`
-2. **AI Agent**: Complex workflow automation for habit creation and reminders
+### Why IO Intelligence?
+- **Next-Gen Models**: Access to high-performance models like Llama 4 and Mistral Nemo.
+- **Scalable Performance**: Decentralized architecture ensures fast verification even during peak times.
+- **Cost-Efficiency**: Leveraging decentralized GPUs allows us to provide premium AI features at a fraction of the cost.
+- **True Authenticity**: Provides the technical foundation for a "Proof-of-Work" approach to personal habits.
 
-### Why IO.net?
-- **Cost-Effective**: ~90% cheaper than traditional cloud AI
-- **Decentralized**: No single point of failure
-- **High Performance**: Access to latest models (Llama 4, Mistral)
-- **Scalable**: Handles concurrent verification requests
+---
 
 ## 📋 Prerequisites
 
@@ -83,79 +89,6 @@ result = IONetService.verify_habit_proof(
 - Redis 6+ (for WebSocket/Channels) - Optional for basic functionality
 - IO.net API Key ([Get one here](https://io.net))
 
-## 🐳 Quick Start with Docker (Recommended)
-
-En hızlı kurulum yöntemi! Tek komutla tüm sistem hazır:
-
-```bash
-# Repository'yi klonlayın
-git clone https://github.com/isobed18/habitbud-backend.git
-cd habitbud-backend/habit_tracker
-
-# İLK KURULUM: Cache olmadan build et ve başlat (önerilen)
-docker-compose build --no-cache
-docker-compose up -d
-
-# VEYA tek komutla (cache olmadan):
-docker-compose build --no-cache && docker-compose up -d
-```
-
-**İlk Kurulum Sonrası (Sonraki Kullanımlar):**
-```bash
-# Container'ları başlat (cache kullanır, daha hızlı)
-docker-compose up -d
-
-# Veya build ile birlikte (değişiklik varsa):
-docker-compose up --build -d
-```
-
-Bu komutlar otomatik olarak:
-- ✅ Redis container'ını başlatır
-- ✅ Django uygulamasını build eder ve başlatır
-- ✅ Database migrations'ları çalıştırır
-- ✅ Challenge templates ve items'ları oluşturur
-- ✅ Demo kullanıcıları oluşturur
-- ✅ Server'ı `http://localhost:8000` adresinde başlatır
-
-**Demo Kullanıcılar (Otomatik Oluşturulur):**
-
-| Kullanıcı Adı | Şifre | Email | Açıklama |
-|--------------|-------|-------|----------|
-| `aslan_berk` | `password123` | berk@example.com | 45 günlük koşu serisi, disiplin odaklı |
-| `zeynep_enerji` | `password123` | zeynep@example.com | 60 günlük su içme serisi, sağlık odaklı |
-| `demir_disiplin` | `password123` | demir@example.com | 100 günlük kod yazma serisi, geliştirici |
-
-**Docker Komutları:**
-```bash
-# Server'ı başlat (background)
-docker-compose up -d
-
-# Logları görüntüle
-docker-compose logs -f web
-
-# Tüm logları görüntüle
-docker-compose logs -f
-
-# Server'ı durdur
-docker-compose down
-
-# Server'ı durdur ve volume'ları sil (tamamen temizle)
-docker-compose down -v
-
-# Container durumunu kontrol et
-docker-compose ps
-
-# Demo kullanıcıları oluşturmadan başlatmak için:
-# docker-compose.yml'de CREATE_DEMO_USERS=false yapın
-```
-
-**Önemli Notlar:**
-- **İlk kurulum:** `--no-cache` kullanın, böylece tüm dependencies (pytz dahil) doğru şekilde yüklenir
-- **Sonraki kullanımlar:** Cache kullanarak daha hızlı başlatabilirsiniz
-- İlk build işlemi 1-2 dakika sürebilir (dependencies indirme)
-- Sonraki başlatmalar çok daha hızlıdır (5-10 saniye)
-
----
 
 ## 🛠️ Manual Installation
 
@@ -167,10 +100,10 @@ cd habitbud-backend/habit_tracker
 
 ### 2. Create Virtual Environment
 
-**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+**IMPORTANT: Make sure you are in the `habit_tracker` directory**
 
 ```bash
-# Eğer habit_tracker dizininde değilseniz:
+# If you are not in the habit_tracker directory:
 cd habit_tracker
 
 python -m venv venv
@@ -184,10 +117,10 @@ source venv/bin/activate
 
 ### 3. Install Dependencies
 
-**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+**IMPORTANT: Make sure you are in the `habit_tracker` directory**
 
 ```bash
-# Eğer habit_tracker dizininde değilseniz:
+# If you are not in the habit_tracker directory:
 cd habit_tracker
 
 pip install -r requirements.txt
@@ -195,13 +128,13 @@ pip install -r requirements.txt
 
 ### 4. Environment Configuration
 
-**ÖNEMLİ: IPv4 Adresinizi Bulun**
+**IMPORTANT: Find Your IPv4 Address**
 
-Windows'ta IPv4 adresinizi bulmak için:
+To find your IPv4 address on Windows:
 ```bash
 ipconfig
 ```
-Çıktıda "IPv4 Address" satırını bulun (örnek: `192.168.1.9`). Bu adresi kullanacaksınız.
+Find the "IPv4 Address" line in the output (e.g., `192.168.1.9`). You will use this address.
 
 Create a `.env` file in the `habit_tracker` directory:
 
@@ -209,7 +142,7 @@ Create a `.env` file in the `habit_tracker` directory:
 # Django Settings
 SECRET_KEY=your-secret-key-here
 DEBUG=True
-# IPv4 adresinizi buraya ekleyin (ipconfig ile bulduğunuz adres)
+# Add your IPv4 address here (the address you found with ipconfig)
 ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.9
 
 # Database (SQLite kullanılıyorsa bu satırı atlayabilirsiniz)
@@ -227,52 +160,52 @@ JWT_SECRET_KEY=your-jwt-secret
 JWT_ALGORITHM=HS256
 ```
 
-**Not:** `.env` dosyası oluşturmanız zorunlu değildir. Proje varsayılan olarak SQLite kullanır ve çalışır.
+**Note:** Creating a `.env` file is not mandatory. The project uses SQLite by default and will work.
 
 ### 5. Database Setup
 
-**Not:** Proje varsayılan olarak SQLite kullanır. PostgreSQL kurulumu opsiyoneldir.
+**Note:** The project uses SQLite by default. PostgreSQL installation is optional.
 
-**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+**IMPORTANT: Make sure you are in the `habit_tracker` directory**
 
 ```bash
-# Eğer habit_tracker dizininde değilseniz:
+# If you are not in the habit_tracker directory:
 cd habit_tracker
 
-# Run migrations (SQLite otomatik oluşturulur)
+# Run migrations (SQLite is created automatically)
 python manage.py migrate
 
-# Populate challenge templates (optional - ÖNCE bu çalıştırılmalı)
-# Bu komut item'ları ve challenge template'lerini oluşturur
+# Populate challenge templates (optional - this should be run FIRST)
+# This command creates items and challenge templates
 python manage.py populate_challenges
 
-# Create demo users (optional - SONRA bu çalıştırılmalı)
-# Demo kullanıcılar item'lara ihtiyaç duyar, bu yüzden önce populate_challenges çalıştırılmalı
+# Create demo users (optional - this should be run AFTER)
+# Demo users need items, so populate_challenges must be run first
 python manage.py create_demo_users
 ```
 
-**Demo Kullanıcı Bilgileri:**
+**Demo User Information:**
 
-| Kullanıcı Adı | Şifre | Email | Açıklama |
+| Username | Password | Email | Description |
 |--------------|-------|-------|----------|
-| `aslan_berk` | `password123` | berk@example.com | 45 günlük koşu serisi, disiplin odaklı |
-| `zeynep_enerji` | `password123` | zeynep@example.com | 60 günlük su içme serisi, sağlık odaklı |
-| `demir_disiplin` | `password123` | demir@example.com | 100 günlük kod yazma serisi, geliştirici |
+| `runner` | `password123` | runner@example.com | 45-day running streak, discipline focused |
+| `drinker` | `password123` | drinker@example.com | 60-day water drinking streak, health focused |
+| `coder` | `password123` | coder@example.com | 100-day coding streak, developer |
 
-**PostgreSQL kullanmak isterseniz:**
+**If you want to use PostgreSQL:**
 ```bash
-# PostgreSQL database oluştur
+# Create PostgreSQL database
 createdb habitbud
 
-# settings.py'de DATABASE_URL'i kullanacak şekilde yapılandırın
+# Configure settings.py to use DATABASE_URL
 ```
 
 ### 6. Create Superuser
 
-**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+**IMPORTANT: Make sure you are in the `habit_tracker` directory**
 
 ```bash
-# Eğer habit_tracker dizininde değilseniz:
+# If you are not in the habit_tracker directory:
 cd habit_tracker
 
 python manage.py createsuperuser
@@ -280,56 +213,56 @@ python manage.py createsuperuser
 
 ### 7. Run Development Server
 
-**ÖNEMLİ: IPv4 Adresinizi Kullanın**
+**IMPORTANT: Use Your IPv4 Address**
 
-Önce IPv4 adresinizi bulun:
+First, find your IPv4 address:
 ```bash
 # Windows
 ipconfig
 
-# Çıktıda "IPv4 Address" satırını bulun (örnek: 192.168.1.9)
+# Find the "IPv4 Address" line in the output (e.g., 192.168.1.9)
 ```
 
-**ÖNEMLİ: `habit_tracker` dizininde olduğunuzdan emin olun**
+**IMPORTANT: Make sure you are in the `habit_tracker` directory**
 
 ```bash
-# Eğer habit_tracker dizininde değilseniz:
+# If you are not in the habit_tracker directory:
 cd habit_tracker
 
-# Start Redis (in separate terminal - Optional, sadece WebSocket için gerekli)
+# Start Redis (in separate terminal - Optional, required for WebSocket only)
 redis-server
 
 # Start Django server
-# 0.0.0.0 tüm ağ arayüzlerinde dinler, böylece telefonunuzdan da erişebilirsiniz
+# 0.0.0.0 listens on all network interfaces, so you can also access it from your phone
 python manage.py runserver 0.0.0.0:8000
 ```
 
-**Erişim URL'leri:**
-- Yerel: `http://localhost:8000` veya `http://127.0.0.1:8000`
-- Ağdan (telefon/başka bilgisayar): `http://192.168.1.9:8000` (IPv4 adresinizi kullanın)
+**Access URLs:**
+- Local: `http://localhost:8000` or `http://127.0.0.1:8000`
+- From network (phone/another computer): `http://192.168.1.9:8000` (Use your IPv4 address)
 
 ### 8. Run WebSocket Server (Optional)
 For real-time chat and notifications:
 ```bash
-# WebSocket için Daphne kullanın (normal runserver WebSocket desteklemez)
+# Use Daphne for WebSocket (normal runserver doesn't support WebSocket)
 daphne -b 0.0.0.0 -p 8001 habit_tracker.asgi:application
 ```
 
-**Not:** WebSocket kullanmıyorsanız bu adımı atlayabilirsiniz. Normal HTTP API'ler için gerekli değildir.
+**Note:** If you are not using WebSocket, you can skip this step. It is not required for normal HTTP APIs.
 
 ## 🧪 Testing the AI Features
 
-**Not:** `localhost` yerine IPv4 adresinizi kullanabilirsiniz (örnek: `192.168.1.9`)
+**Note:** You can use your IPv4 address instead of `localhost` (e.g., `192.168.1.9`)
 
 ### Test Proof Verification
 ```bash
-# Using the API (localhost yerine IPv4 adresinizi de kullanabilirsiniz)
+# Using the API (You can also use your IPv4 address instead of localhost)
 curl -X POST http://localhost:8000/chat/proof/ai/ \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F "habit_id=HABIT_UUID" \
   -F "proof_image=@/path/to/photo.jpg"
 
-# Veya IPv4 adresi ile:
+# Or with IPv4 address:
 curl -X POST http://192.168.1.9:8000/chat/proof/ai/ \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -F "habit_id=HABIT_UUID" \
@@ -346,7 +279,7 @@ curl -X POST http://localhost:8000/chat/ai-agent/ \
     "instructions": "Make them actionable and specific"
   }'
 
-# Veya IPv4 adresi ile:
+# Or with IPv4 address:
 curl -X POST http://192.168.1.9:8000/chat/ai-agent/ \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
@@ -359,11 +292,11 @@ curl -X POST http://192.168.1.9:8000/chat/ai-agent/ \
 ## 📱 API Documentation
 
 Full API documentation is available at:
-- **Swagger UI**: `http://localhost:8000/api/docs/` veya `http://192.168.1.9:8000/api/docs/` (IPv4 adresinizi kullanın)
-- **ReDoc**: `http://localhost:8000/api/redoc/` veya `http://192.168.1.9:8000/api/redoc/`
+- **Swagger UI**: `http://localhost:8000/api/docs/` or `http://192.168.1.9:8000/api/docs/` (Use your IPv4 address)
+- **ReDoc**: `http://localhost:8000/api/redoc/` or `http://192.168.1.9:8000/api/redoc/`
 - **Markdown**: See `API_DOCUMENTATION.md`
 
-**Not:** Telefon veya başka bir cihazdan erişmek için `localhost` yerine IPv4 adresinizi kullanın.
+**Note:** To access from a phone or another device, use your IPv4 address instead of `localhost`.
 
 ### Key Endpoints
 
@@ -404,7 +337,7 @@ Full API documentation is available at:
 - **Backend**: Django 4.2 + Django REST Framework
 - **Database**: PostgreSQL (with UUID primary keys)
 - **Real-time**: Django Channels + Redis
-- **AI**: IO.net API (Llama 4, Mistral models)
+- **AI Engine**: IO Intelligence (Llama 4, Mistral models)
 - **Authentication**: JWT (Simple JWT)
 - **Image Processing**: Pillow
 
@@ -483,7 +416,7 @@ MIT License - See LICENSE file for details
 
 ## 🙏 Acknowledgments
 
-- **IO.net**: For providing affordable, decentralized AI infrastructure
+- **IO Intelligence (powered by IO.net)**: For providing affordable, decentralized AI infrastructure
 - **BeReal & Snapchat**: Inspiration for authentic social engagement
 - **Django Community**: For the excellent framework and ecosystem
 

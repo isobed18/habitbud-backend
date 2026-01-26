@@ -21,8 +21,8 @@ class Command(BaseCommand):
         # 1. Define Demo Users
         demo_users_data = [
             {
-                'username': 'aslan_berk',
-                'email': 'berk@example.com',
+                'username': 'runner',
+                'email': 'runner@example.com',
                 'bio': 'Disiplin her şeydir. 30 günlük koşu serimi asla bozmam.',
                 'xp': 4500,
                 'level': 10,
@@ -36,8 +36,8 @@ class Command(BaseCommand):
                 'items': ['Golden Shoes', 'Heart Locket']
             },
             {
-                'username': 'zeynep_enerji',
-                'email': 'zeynep@example.com',
+                'username': 'drinker',
+                'email': 'drinker@example.com',
                 'bio': 'Sağlıklı yaşam ve bol su! 💧 Habit Tracker ile hayatım değişti.',
                 'xp': 6200,
                 'level': 12,
@@ -51,8 +51,8 @@ class Command(BaseCommand):
                 'items': ['Crystal Bottle']
             },
             {
-                'username': 'demir_disiplin',
-                'email': 'demir@example.com',
+                'username': 'coder',
+                'email': 'coder@example.com',
                 'bio': 'Kod yazmak ve spor yapmak hobim değil, yaşam tarzım.',
                 'xp': 3200,
                 'level': 8,
