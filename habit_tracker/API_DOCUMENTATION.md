@@ -16,10 +16,14 @@
 4. [Chat & Conversations](#4-chat--conversations)
 5. [Stories](#5-stories)
 6. [Proof Submission & Verification](#6-proof-submission--verification)
-7. [AI Coach & Assistant](#7-ai-coach--assistant)
+7. [~~AI Coach & Assistant~~](#7-ai-coach--assistant) *(Shelved - returns 503)*
 8. [Challenges & Rewards](#8-challenges--rewards)
 9. [WebSocket](#9-websocket)
 10. [Gamification Mechanics](#10-gamification-mechanics)
+11. [User Search](#11-user-search)
+12. [Notifications](#12-notifications)
+13. [Achievements](#13-achievements)
+14. [Health Check](#14-health-check)
 
 ---
 
@@ -1166,3 +1170,152 @@ await fetch(`http://localhost:8000/habits/${habit.id}/`, {
 const ws = new WebSocket(`ws://localhost:8000/ws/chat/${conversationId}/?token=${access}`);
 ```
 
+---
+
+## 11. User Search
+
+### 11.1 Search Users
+**GET** `/users/api/search/?q={query}`
+
+**Authentication:** Required
+
+**Query Parameters:**
+- `q`: Search string (min 2 characters)
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": "uuid",
+    "username": "string",
+    "email": "string",
+    "bio": "string",
+    "xp": 0,
+    "level": 1,
+    "points": 0,
+    "avatar": "url or null"
+  }
+]
+```
+
+---
+
+## 12. Notifications
+
+### 12.1 List Notifications
+**GET** `/users/api/notifications/`
+
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": "uuid",
+    "title": "string",
+    "message": "string",
+    "notification_type": "INFO|SUCCESS|WARNING|AI_AGENT",
+    "is_read": false,
+    "created_at": "datetime"
+  }
+]
+```
+
+### 12.2 Mark Notification as Read
+**POST** `/users/api/notifications/{notification_id}/read/`
+
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{ "message": "Notification marked as read." }
+```
+
+### 12.3 Mark All Notifications as Read
+**POST** `/users/api/notifications/read-all/`
+
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{ "message": "5 notifications marked as read." }
+```
+
+---
+
+## 13. Achievements
+
+### 13.1 List Achievements
+**GET** `/achievements/`
+
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": "uuid",
+    "name": "string",
+    "description": "string",
+    "icon": "url or null",
+    "date_awarded": "datetime",
+    "challenge": "uuid or null"
+  }
+]
+```
+
+---
+
+## 14. Health Check
+
+### 14.1 Health Check
+**GET** `/api/health/`
+
+**Authentication:** Not required
+
+**Response:** `200 OK`
+```json
+{ "status": "ok", "service": "habitbud-backend" }
+```
+
+---
+
+## 15. Friend Remove
+
+### 15.1 Remove Friend
+**DELETE** `/friends/remove/{friend_user_id}/`
+
+**Authentication:** Required
+
+**Response:** `200 OK`
+```json
+{ "message": "Friend removed." }
+```
+
+---
+
+## Changelog
+
+### v2.0.0 (2026-02-25) - Production Ready
+
+**Breaking Changes:**
+- AI proof verification is **shelved** (endpoints return `503 Service Unavailable`)
+- Social proof no longer requires AI verification first
+- `posts` app removed
+
+**New Endpoints:**
+- `GET /api/health/` - Health check
+- `GET /users/api/search/?q=` - User search
+- `GET /users/api/notifications/` - Notification list
+- `POST /users/api/notifications/{id}/read/` - Mark notification read
+- `POST /users/api/notifications/read-all/` - Mark all read
+- `GET /achievements/` - Achievement list
+- `DELETE /friends/remove/{id}/` - Remove friend
+
+**Enhancements:**
+- Friend list now includes `friendship_streak` and `last_interaction_date`
+- Environment-based configuration (SECRET_KEY, DEBUG, DATABASE_URL)
+- PostgreSQL support with SQLite fallback
+- Redis/InMemory channel layer auto-detection
+- Production security headers
+- Logging configuration
