@@ -66,19 +66,37 @@ class RespondToFriendRequestView(APIView):
             return Response({'message': 'Friend request accepted.'}, status=status.HTTP_200_OK)
         elif action == 'decline':
             friend_request.status = Friendship.Status.DECLINED
-            # Or you could delete it: friend_request.delete()
             friend_request.save() 
             return Response({'message': 'Friend request declined.'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Invalid action.'}, status=status.HTTP_400_BAD_REQUEST)
 
+
+class FriendRemoveView(APIView):
+    """Remove an accepted friendship."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, friend_id, *args, **kwargs):
+        friendship = Friendship.objects.filter(
+            (Q(from_user=request.user, to_user_id=friend_id) |
+             Q(from_user_id=friend_id, to_user=request.user)),
+            status=Friendship.Status.ACCEPTED
+        ).first()
+
+        if not friendship:
+            return Response({'error': 'Friendship not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        friendship.delete()
+        return Response({'message': 'Friend removed.'}, status=status.HTTP_200_OK)
+
+
 class FriendListView(generics.ListAPIView):
+    """List all accepted friends with friendship streak info."""
     permission_classes = [IsAuthenticated]
     serializer_class = FriendUserSerializer
 
     def get_queryset(self):
         user = self.request.user
-        # Find all accepted friendships where the current user is either the sender or receiver
         friendships = Friendship.objects.filter(
             Q(from_user=user, status=Friendship.Status.ACCEPTED) |
             Q(to_user=user, status=Friendship.Status.ACCEPTED)
@@ -92,3 +110,22 @@ class FriendListView(generics.ListAPIView):
                 friend_ids.append(friendship.from_user_id)
                 
         return User.objects.filter(id__in=friend_ids)
+
+    def list(self, request, *args, **kwargs):
+        """Override to include streak data per friend."""
+        queryset = self.get_queryset()
+        user = request.user
+
+        friends_data = []
+        for friend in queryset:
+            friendship = Friendship.objects.filter(
+                (Q(from_user=user, to_user=friend) | Q(from_user=friend, to_user=user)),
+                status=Friendship.Status.ACCEPTED
+            ).first()
+
+            friend_data = FriendUserSerializer(friend).data
+            friend_data['friendship_streak'] = friendship.streak if friendship else 0
+            friend_data['last_interaction_date'] = friendship.last_interaction_date if friendship else None
+            friends_data.append(friend_data)
+
+        return Response(friends_data)

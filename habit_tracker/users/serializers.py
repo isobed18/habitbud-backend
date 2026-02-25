@@ -28,10 +28,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(**validated_data)
         return user
 
-from .models import Reminder
+from .models import Reminder, Notification
 
 class ReminderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reminder
         fields = ['id', 'title', 'message', 'time', 'is_active', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'title', 'message', 'notification_type', 'is_read', 'created_at']
+        read_only_fields = ['id', 'title', 'message', 'notification_type', 'created_at']

@@ -1,35 +1,25 @@
-# Create your views here.
-from django.shortcuts import render, redirect
-from django.contrib.auth import login, authenticate
-from rest_framework_simplejwt.exceptions import TokenError
-from .forms import CustomUserCreationForm
-from django.contrib.auth.forms import AuthenticationForm
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from .serializers import UserSerializer
-from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from django.contrib.auth import authenticate
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth import login, authenticate, get_user_model
 from django.http import JsonResponse
-from datetime import datetime
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import get_user_model
-from .serializers import UserSerializer, UserRegistrationSerializer
-from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework import status, generics
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from .forms import CustomUserCreationForm
+from .serializers import UserSerializer, UserRegistrationSerializer, ReminderSerializer, NotificationSerializer
+from .models import Reminder, Notification
+from django.db.models import Q
 
 User = get_user_model()
 
-   
 
 class RegisterView(APIView):
     permission_classes = (AllowAny,)
-    authentication_classes = []  # Login/Register için authentication gerekmez
+    authentication_classes = []
 
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
@@ -43,13 +33,13 @@ class RegisterView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class LoginView(APIView):
     permission_classes = (AllowAny,)
-    authentication_classes = []  # Login/Register için authentication gerekmez
+    authentication_classes = []
 
     def post(self, request):
         username = request.data.get('username')
-      
         password = request.data.get('password')
         
         try:
@@ -67,6 +57,7 @@ class LoginView(APIView):
             'access': str(refresh.access_token),
         })
 
+
 class LogoutView(APIView):
     permission_classes = (IsAuthenticated,)
 
@@ -77,14 +68,12 @@ class LogoutView(APIView):
             token.blacklist()
             return Response(status=status.HTTP_205_RESET_CONTENT)
         except KeyError:
-            # Refresh anahtarı eksikse
             return Response({"error": "Missing 'refresh' token in request body."}, status=status.HTTP_400_BAD_REQUEST)
         except TokenError as e:
-            # Token geçersiz veya süresi dolduysa
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            # Diğer hatalar
             return Response({"error": "An unexpected error occurred: " + str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserProfileView(APIView):
     permission_classes = (IsAuthenticated,)
@@ -100,14 +89,13 @@ class UserProfileView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class LeaderboardView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request):
         from friends.models import Friendship
-        from django.db.models import Q
 
-        # Get all accepted friendships for the current user
         friendships = Friendship.objects.filter(
             (Q(from_user=request.user) | Q(to_user=request.user)),
             status=Friendship.Status.ACCEPTED
@@ -120,20 +108,18 @@ class LeaderboardView(APIView):
             else:
                 friends.append(f.from_user)
         
-        # Include self
         users = list(friends) + [request.user]
-        # Sort by XP descending
         users.sort(key=lambda u: u.xp, reverse=True)
         
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
+
 
 class PublicUserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, user_id):
         from friends.models import Friendship
-        from django.db.models import Q
         from habits.models import Habit
         from habits.serializers import HabitSerializer
 
@@ -153,7 +139,7 @@ class PublicUserProfileView(APIView):
             "points": target_user.points,
             "avatar": target_user.avatar.url if target_user.avatar else None,
             "is_friend": is_friend,
-            "habits": [] # Show public habits if friends
+            "habits": []
         }
 
         if is_friend or request.user == target_user:
@@ -162,19 +148,13 @@ class PublicUserProfileView(APIView):
 
         return Response(data)
 
-from rest_framework_simplejwt.views import TokenRefreshView
-from django.shortcuts import get_object_or_404
 
 class CustomTokenRefreshView(TokenRefreshView):
-    """
-    Custom view to handle cases where the user associated with the refresh token
-    has been deleted (e.g., during development seeding), returning 401 instead of 500.
-    """
+    """Handle cases where the user associated with refresh token has been deleted."""
     def post(self, request, *args, **kwargs):
         try:
             return super().post(request, *args, **kwargs)
         except Exception as e:
-            # Catch "CustomUser matching query does not exist" or similar DB errors
             if "matching query does not exist" in str(e):
                 return Response(
                     {"code": "user_not_found", "detail": "User no longer exists. Please login again."}, 
@@ -182,9 +162,10 @@ class CustomTokenRefreshView(TokenRefreshView):
                 )
             raise e
 
-from .models import Reminder
-from .serializers import ReminderSerializer
-from rest_framework import generics
+
+# ============================================================================
+# REMINDERS
+# ============================================================================
 
 class ReminderListView(generics.ListAPIView):
     """List all scheduled reminders for the user."""
@@ -194,6 +175,7 @@ class ReminderListView(generics.ListAPIView):
     def get_queryset(self):
         return Reminder.objects.filter(user=self.request.user).order_by('time')
 
+
 class ReminderDeleteView(generics.DestroyAPIView):
     """Delete a reminder."""
     serializer_class = ReminderSerializer
@@ -201,3 +183,57 @@ class ReminderDeleteView(generics.DestroyAPIView):
 
     def get_queryset(self):
         return Reminder.objects.filter(user=self.request.user)
+
+
+# ============================================================================
+# NOTIFICATIONS
+# ============================================================================
+
+class NotificationListView(generics.ListAPIView):
+    """List notifications for the authenticated user."""
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+
+
+class NotificationMarkReadView(APIView):
+    """Mark a single notification as read."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, notification_id):
+        notification = get_object_or_404(Notification, id=notification_id, user=request.user)
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+        return Response({'message': 'Notification marked as read.'})
+
+
+class NotificationMarkAllReadView(APIView):
+    """Mark all notifications as read."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        count = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({'message': f'{count} notifications marked as read.'})
+
+
+# ============================================================================
+# USER SEARCH
+# ============================================================================
+
+class UserSearchView(APIView):
+    """Search users by username (partial match)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+        if len(query) < 2:
+            return Response({'error': 'Search query must be at least 2 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        users = User.objects.filter(
+            username__icontains=query
+        ).exclude(id=request.user.id)[:20]
+        
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)

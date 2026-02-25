@@ -12,6 +12,14 @@ urlpatterns = [
     path('api/profile/', views.UserProfileView.as_view(), name='profile'),
     path('api/leaderboard/', views.LeaderboardView.as_view(), name='leaderboard'),
     path('api/profile/<uuid:user_id>/', views.PublicUserProfileView.as_view(), name='public-profile'),
+    path('api/search/', views.UserSearchView.as_view(), name='user-search'),
+
+    # Notifications
+    path('api/notifications/', views.NotificationListView.as_view(), name='notification-list'),
+    path('api/notifications/<uuid:notification_id>/read/', views.NotificationMarkReadView.as_view(), name='notification-read'),
+    path('api/notifications/read-all/', views.NotificationMarkAllReadView.as_view(), name='notification-read-all'),
+
+    # Shortcuts
     path('friends/', FriendListView.as_view(), name='user-friends-alias'),
     path('items/', UserInventoryView.as_view(), name='user-items'),
     path('reminders/', views.ReminderListView.as_view(), name='user-reminders'),
