@@ -6,11 +6,6 @@ from pathlib import Path
 import os
 from datetime import timedelta
 
-try:
-    from celery.schedules import crontab
-except ImportError:
-    crontab = None
-
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -198,26 +193,11 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ============================================================================
-# REDIS & CELERY
+# REDIS & CHANNELS
 # ============================================================================
 
 REDIS_HOST = os.getenv('REDIS_HOST', '127.0.0.1')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
-
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', f'redis://{REDIS_HOST}:{REDIS_PORT}/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', f'redis://{REDIS_HOST}:{REDIS_PORT}/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-
-if crontab:
-    CELERY_BEAT_SCHEDULE = {
-        'reset-habits': {
-            'task': 'habits.tasks.reset_habits',
-            'schedule': crontab(minute=0, hour=0),
-        },
-    }
 
 # ============================================================================
 # CACHE
