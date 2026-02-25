@@ -12,7 +12,10 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
-from celery.schedules import crontab
+try:
+    from celery.schedules import crontab
+except ImportError:
+    crontab = None
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -197,12 +200,13 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # Celery Beat Schedule
-CELERY_BEAT_SCHEDULE = {
-    'reset-habits': {
-        'task': 'habits.tasks.reset_habits',
-        'schedule': crontab(minute=0, hour=0),  # Run at midnight every day
-    },
-}
+if crontab:
+    CELERY_BEAT_SCHEDULE = {
+        'reset-habits': {
+            'task': 'habits.tasks.reset_habits',
+            'schedule': crontab(minute=0, hour=0),  # Run at midnight every day
+        },
+    }
 
 # Cache settings
 CACHES = {

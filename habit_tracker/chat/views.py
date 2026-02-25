@@ -121,16 +121,9 @@ class ProofSubmissionView(APIView):
         from habits.models import Habit
         habit = get_object_or_404(Habit, id=habit_id, user=request.user)
         
-        from django.utils import timezone
-        today = timezone.now().date()
-        
-        # PREREQUISITE: Must be verified by AI first
-        if habit.last_ai_verification_date != today:
-             return Response({'error': 'You must verify this habit with AI first before sending it to your friends.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Check if already submitted today (Social Track - Optional, prevents spam)
-        # We removed the hard block here to allow retrying if friend rejected, 
-        # but the frontend usually handles the UI state.
+        # Habit must be completed today before sending proof
+        if not habit.is_completed_today():
+            return Response({'error': 'Habit must be completed before submitting proof.'}, status=status.HTTP_400_BAD_REQUEST)
 
         
         # 1. Resolve Conversation (Social Only)
@@ -188,69 +181,14 @@ class ProofSubmissionView(APIView):
             )
 
 class AIProofSubmissionView(APIView):
+    """AI Proof - Currently shelved. Will return 503."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        """
-        AI Proof Submission: Sends a proof image to IO.net Intelligence for standalone verification.
-        Does NOT create a chat message. Returns verification result directly.
-        """
-        habit_id = request.data.get('habit_id')
-        proof_image = request.FILES.get('proof_image')
-
-        if not habit_id or not proof_image:
-            return Response({'error': 'habit_id and proof_image are required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        from habits.models import Habit
-        habit = get_object_or_404(Habit, id=habit_id, user=request.user)
-        
-        from django.utils import timezone
-        
-        # Check if already submitted today (AI Track)
-        if habit.last_ai_verification_date == timezone.now().date():
-             return Response({'error': 'You have already verified this habit with AI today.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # STRICT CHECK: Habit must be completed before verification
-        if not habit.is_completed_today():
-             return Response({'error': 'Habit must be completed before submitting proof.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # --- AI SERVICE EXECUTION ---
-        from habit_tracker.services import IONetService
-        from users.services import UserService
-        from django.utils import timezone
-        
-        io_service = IONetService()
-        ai_result = {'verified': False, 'reason': 'AI Service Error'}
-        
-        try:
-            print(f"DEBUG: Processing verification for Habit ID: {habit_id}")
-            # Habit model has no description field, passing None
-            ai_result = io_service.verify_habit_proof(proof_image, habit.name, username=request.user.username, habit_description=None)
-            print(f"DEBUG: IO.net Raw Result: {ai_result}")
-        except Exception as e:
-            print(f"DEBUG: AI Error: {e}")
-            ai_result = {'verified': False, 'reason': f"Service Error: {e}"}
-
-        response_data = {
-            'mode': 'ai_verification',
-            'ai_status': ai_result,
-            'xp_awarded': 0
-        }
-        
-        if ai_result.get('verified'):
-            print("DEBUG: Verification SUCCESS. Updating streaks.")
-            # Award XP
-            UserService.add_xp(request.user, 20)
-            response_data['xp_awarded'] = 20
-            
-            # Update Habit Verification Streak & Stats
-            habit.update_verification_streak()
-            habit.update_ai_streak()
-        else:
-            print("DEBUG: Verification FAILED or denied by AI.")
-            
-        print(f"DEBUG: Final Response to Frontend: {response_data}")
-        return Response(response_data, status=status.HTTP_200_OK)
+        return Response(
+            {'error': 'AI proof verification is currently unavailable. Please use social proof with friends.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
 
 class VerifyProofView(APIView):
     permission_classes = [IsAuthenticated]
@@ -318,172 +256,24 @@ class VerifyProofView(APIView):
             )
 
 class AICoachView(APIView):
+    """AI Coach - Currently shelved. Will return 503."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        """
-        AI Habit Coach: Provides personalized advice based on habit stats.
-        """
-        habit_id = request.data.get('habit_id')
-        user_message = request.data.get('message')
-
-        if not habit_id or not user_message:
-            return Response({'error': 'habit_id and message are required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        from habits.models import Habit, HabitHistory
-        habit = get_object_or_404(Habit, id=habit_id, user=request.user)
-        
-        # 1. Gather 7-Day History Context
-        history_snapshots = HabitHistory.objects.filter(habit=habit).order_by('-date')[:7]
-        habithistory_data = [
-            {"date": str(h.date), "count": h.count} for h in history_snapshots
-        ]
-        
-        # 2. Gather Recent Chat History (Continuity)
-        recent_messages = ChatMessage.objects.filter(
-            sender=request.user, 
-            related_habit=habit
-        ).order_by('-created_at')[:5]
-        
-        chat_history_data = [
-            {"role": "user" if m.sender == request.user else "assistant", "content": m.content}
-            for m in reversed(recent_messages)
-        ]
-        
-        # Gather Live Stats Context
-        stats = {
-            "streak": habit.streak,
-            "best_streak": habit.best_streak,
-            "total_completions": habit.completed_count,
-            "habit_type": habit.habit_type,
-            "frequency": habit.frequency
-        }
-        
-        from habit_tracker.services import IONetService
-        io_service = IONetService()
-        
-        advice = io_service.get_coaching_advice(
-            habit_name=habit.name,
-            stats=stats,
-            user_message=user_message,
-            username=request.user.username,
-            history=chat_history_data,
-            habithistory=habithistory_data
+        return Response(
+            {'error': 'AI coaching is currently unavailable.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
-        
-        return Response({'advice': advice}, status=status.HTTP_200_OK)
 
 class AIAgentView(APIView):
+    """AI Agent - Currently shelved. Will return 503."""
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        """
-        AI Agent: Executes a complex workflow objective using IO.net Custom Agent.
-        """
-        print(f"DEBUG: AIAgent FULL REQUEST PAYLOAD: {request.data}")
-        objective = request.data.get('objective')
-        instructions = request.data.get('instructions', "Provide actionable insights based on the objective.")
-
-        if not objective:
-            return Response({'error': 'objective is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        from habit_tracker.services import IONetService
-        io_service = IONetService()
-        
-        print(f"DEBUG: AIAgent Objective: {objective}")
-        result = io_service.run_agent_workflow(
-            objective=objective,
-            instructions=instructions
+        return Response(
+            {'error': 'AI agent is currently unavailable.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
-        print(f"DEBUG: AIAgent Raw Result: {result}")
-        
-        # 2. Parse Actionable Response
-        try:
-            # IO.net often returns the generation inside a "result" key string
-            raw_content = result.get('result', '')
-            # Clean markdown if present
-            raw_content = raw_content.replace("```json", "").replace("```", "").strip()
-            
-            ai_data = json.loads(raw_content)
-            
-            if ai_data.get('action') == 'create_habits':
-                from habits.models import Habit
-                created_habits = []
-                
-                for h_data in ai_data.get('habits', []):
-                    # Check duplication
-                    if not Habit.objects.filter(user=request.user, name=h_data['name']).exists():
-                        habit = Habit.objects.create(
-                            user=request.user,
-                            name=h_data['name'],
-                            habit_type='count',
-                            target_count=h_data.get('target_count', 1),
-                            frequency=h_data.get('frequency', 'daily')
-                        )
-                        created_habits.append(habit)
-                
-                return Response({
-                    "success": True,
-                    "action_performed": "create_habits",
-                    "habits_created": [h.name for h in created_habits],
-                    "message": ai_data.get('message', "Habits created successfully.")
-                }, status=status.HTTP_200_OK)
-
-            elif ai_data.get('action') == 'propose_habits':
-                # Just return the proposal, frontend will ask user for confirmation
-                return Response({
-                    "success": True,
-                    "action_performed": "propose_habits",
-                    "habits": ai_data.get('habits', []),
-                    "message": ai_data.get('message', "I have some suggestions.")
-                }, status=status.HTTP_200_OK)
-
-            elif ai_data.get('action') == 'create_notification':
-                from users.models import Notification
-                Notification.objects.create(
-                    user=request.user,
-                    title=ai_data.get('title', 'AI Alert'),
-                    message=ai_data.get('message', ''),
-                    notification_type='AI_AGENT'
-                )
-                return Response({
-                    "success": True,
-                    "action_performed": "create_notification",
-                    "message": "Notification sent."
-                }, status=status.HTTP_200_OK)
-
-            elif ai_data.get('action') == 'schedule_reminder':
-                from users.models import Reminder
-                Reminder.objects.create(
-                    user=request.user,
-                    title=ai_data.get('title', 'Daily Reminder'),
-                    message=ai_data.get('message', ''),
-                    time=ai_data.get('time', '09:00')
-                )
-                return Response({
-                    "success": True,
-                    "action_performed": "schedule_reminder",
-                    "message": f"Daily reminder set for {ai_data.get('time', '09:00')}."
-                }, status=status.HTTP_200_OK)
-                
-            else:
-                # Chat or fallback
-                return Response({
-                    "success": True,
-                    "action_performed": "chat",
-                    "message": ai_data.get('message', raw_content)
-                })
-
-        except json.JSONDecodeError:
-            print("Action parsing failed, returning raw text.")
-            return Response({
-                "success": True,
-                "action_performed": "chat",
-                "message": result.get('result', '')
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            print(f"Agent Execution Error: {e}")
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from .models import Story
 from .serializers import StorySerializer
