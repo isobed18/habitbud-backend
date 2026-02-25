@@ -52,7 +52,6 @@ INSTALLED_APPS = [
     'habit_tracker',
     'challange',
     'achievement',
-    'posts',
     'groups',
     'habits',
     'friends',

@@ -195,7 +195,6 @@ class IONetService:
                 temperature=0.7
             )
             return response.choices[0].message.content.strip()
-            return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"AI Coach error: {e}")
             return "I'm having trouble connecting to my coaching brain right now, but keep going! You got this."

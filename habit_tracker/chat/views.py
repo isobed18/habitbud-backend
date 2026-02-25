@@ -373,8 +373,6 @@ class AICoachView(APIView):
         
         return Response({'advice': advice}, status=status.HTTP_200_OK)
 
-        return Response({'advice': advice}, status=status.HTTP_200_OK)
-
 class AIAgentView(APIView):
     permission_classes = [IsAuthenticated]
 

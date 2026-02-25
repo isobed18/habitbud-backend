@@ -1,7 +1,7 @@
 from .models import Challenge, UserItem, Achievement
 from users.services import UserService
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, models
 
 class ChallengeService:
     @staticmethod
@@ -20,8 +20,6 @@ class ChallengeService:
             ).filter(
                 (models.Q(creator=user) | models.Q(partner=user))
             ).filter(habit_name__iexact=habit.name)
-
-        from django.db import models # for Q
 
 
         for challenge in active_challenges:
