@@ -1,13 +1,4 @@
-from celery import shared_task
-from .models import Habit
-from django.utils import timezone
-
-@shared_task
-def reset_habits():
-    """Reset habits based on their frequency"""
-    today = timezone.now().date()
-    habits = Habit.objects.all()
-    
-    for habit in habits:
-        if habit.should_reset_count():
-            habit.reset_count() 
+# habits/tasks.py
+# Celery task removed — habit reset is handled by lazy evaluation
+# (check_and_reset_progress) which runs when habits are fetched via API.
+# This respects user timezones and requires zero infrastructure.

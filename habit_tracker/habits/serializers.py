@@ -3,6 +3,9 @@ from rest_framework import serializers
 from .models import Habit
 
 class HabitSerializer(serializers.ModelSerializer):
+    streak_tier = serializers.SerializerMethodField()
+    streak_tier_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Habit
         fields = [
@@ -10,13 +13,24 @@ class HabitSerializer(serializers.ModelSerializer):
             'completed_count', 'last_completed_date', 'frequency',
             'total_time', 'target_time', 
             'verified_count', 'verification_streak',
-            'ai_streak', 'last_ai_verification_date',
+            'streak_tier', 'streak_tier_name',
             'color'
         ]
-        read_only_fields = ['streak', 'completed_count', 'last_completed_date', 'verified_count', 'verification_streak', 'ai_streak', 'last_ai_verification_date']
+        read_only_fields = [
+            'streak', 'completed_count', 'last_completed_date', 
+            'verified_count', 'verification_streak',
+            'streak_tier', 'streak_tier_name',
+        ]
+
+    def get_streak_tier(self, obj):
+        tier, _ = obj.streak_tier
+        return tier
+
+    def get_streak_tier_name(self, obj):
+        _, name = obj.streak_tier
+        return name
 
     def validate(self, data):
-        # Instance varsa (Update işlemi), mevcut değerleri al, yoksa data'dan al
         instance = getattr(self, 'instance', None)
         
         habit_type = data.get("habit_type", instance.habit_type if instance else None)

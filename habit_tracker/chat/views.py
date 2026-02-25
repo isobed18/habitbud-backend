@@ -213,16 +213,16 @@ class VerifyProofView(APIView):
                 if not habit.is_completed_today():
                     return Response({'error': 'Habit is not completed today. Cannot verify.'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Update Verification Streak & Stats
+                # Update Verification Streak & Stats (this is the ONLY place it should be called)
                 habit.update_verification_streak()
                 
             proof_message.verification_status = ChatMessage.VerificationStatus.VERIFIED
             
-            # Award XP to the sender
+            # Get friendship for streak multiplier
+            from users.gamification import GamificationEngine
             from users.services import UserService
-            UserService.add_xp(proof_message.sender, 50)
-                
-            # Update Friendship Streak
+            
+            friend_streak = 0
             try:
                 friendship = Friendship.objects.filter(
                     (Q(from_user=request.user, to_user=proof_message.sender) | 
@@ -231,8 +231,21 @@ class VerifyProofView(APIView):
                 ).first()
                 if friendship:
                     friendship.update_streak()
+                    friend_streak = friendship.streak
             except Exception as e:
                 print(f"Error updating friendship streak: {e}")
+
+            # SENDER: base_verify × habit_streak_mult × friend_streak_mult
+            habit_streak = habit.verification_streak if habit else 0
+            sender_xp, h_mult, f_mult = GamificationEngine.calculate_full_reward(
+                GamificationEngine.BASE_VERIFY_XP, habit_streak, friend_streak
+            )
+            UserService.add_xp(proof_message.sender, sender_xp)
+            
+            # VERIFIER: base_verifier × friend_streak_mult
+            verifier_xp = int(GamificationEngine.BASE_VERIFIER_XP * 
+                            GamificationEngine.calculate_friend_streak_multiplier(friend_streak))
+            UserService.add_xp(request.user, verifier_xp)
 
         else:
             proof_message.verification_status = ChatMessage.VerificationStatus.REJECTED
