@@ -79,7 +79,43 @@ class Habit(models.Model):
         """
         Compute completion streak dynamically from HabitCompletion records.
         Frequency-aware: daily = 1 day gap, weekly = 7 day gap, etc.
+        Supports Streak Freeze mechanic for daily habits.
         """
+        if self.frequency != 'daily':
+            return self._calculate_streak_legacy()
+        
+        from users.models import StreakFreezeUsage
+        from datetime import timedelta
+        
+        completions = set(self.completions.values_list('completed_at', flat=True))
+        freezes = set(StreakFreezeUsage.objects.filter(user=self.user).values_list('date', flat=True))
+        
+        today = timezone.now().date()
+        
+        if not completions:
+            return 0
+            
+        streak = 0
+        current_date = today
+        
+        # If today has no completion and is not frozen, we start checking from yesterday.
+        if today not in completions and today not in freezes:
+            current_date = today - timedelta(days=1)
+            
+        while True:
+            if current_date in completions:
+                streak += 1
+            elif current_date in freezes:
+                # Frozen day preserves the streak but doesn't increment
+                pass
+            else:
+                break
+            current_date -= timedelta(days=1)
+            
+        return streak
+
+    def _calculate_streak_legacy(self):
+        from datetime import timedelta
         completions = self.completions.order_by('-completed_at').values_list('completed_at', flat=True)
         
         if not completions:
@@ -90,7 +126,6 @@ class Habit(models.Model):
         
         max_gap = self._get_frequency_gap_days()
         
-        # If latest completion is too old, streak is broken
         if (today - latest_date).days > max_gap:
             return 0
 
@@ -100,11 +135,9 @@ class Habit(models.Model):
         for comp_date in completions:
             gap = (current_check_date - comp_date).days
             if gap == 0:
-                # Same period — count it
                 streak += 1
                 current_check_date = comp_date - timedelta(days=1)
             elif gap <= max_gap:
-                # Still within acceptable gap for this frequency
                 streak += 1
                 current_check_date = comp_date - timedelta(days=1)
             else:
@@ -117,29 +150,35 @@ class Habit(models.Model):
         Compute verification streak dynamically from verified proof records.
         This is the REAL streak that matters for scoring.
         Checks consecutive days where this habit was verified by a friend.
+        Supports Streak Freeze mechanic.
         """
-        verifications = self.verifications.order_by('-verified_date').values_list('verified_date', flat=True)
+        from users.models import StreakFreezeUsage
+        from datetime import timedelta
+        
+        verifications = set(self.verifications.values_list('verified_date', flat=True))
+        freezes = set(StreakFreezeUsage.objects.filter(user=self.user).values_list('date', flat=True))
+        
+        today = timezone.now().date()
         
         if not verifications:
             return 0
         
-        today = timezone.now().date()
-        latest = verifications[0]
-        
-        # Allow 1 day grace (today or yesterday)
-        if (today - latest).days > 1:
-            return 0
-        
         streak = 0
-        expected_date = latest
+        current_date = today
         
-        for v_date in verifications:
-            if v_date == expected_date:
+        # If not verified today and not frozen today, we start checking from yesterday.
+        if today not in verifications and today not in freezes:
+            current_date = today - timedelta(days=1)
+        
+        while True:
+            if current_date in verifications:
                 streak += 1
-                expected_date -= timedelta(days=1)
-            elif v_date < expected_date:
-                # Gap found — streak broken
+            elif current_date in freezes:
+                # Frozen day preserves the streak but doesn't increment
+                pass
+            else:
                 break
+            current_date -= timedelta(days=1)
         
         return streak
 

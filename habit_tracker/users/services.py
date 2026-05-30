@@ -10,14 +10,16 @@ class UserService:
         Uses GamificationEngine for advanced curve logic.
         """
         user.xp += amount
-        user.points += amount
         
         from .gamification import GamificationEngine
         new_level = GamificationEngine.calculate_level(user.xp)
         
+        diamond_bonus = 0
         if new_level > user.level:
             old_level = user.level
             user.level = new_level
+            diamond_bonus = new_level * 5
+            user.points += diamond_bonus
             
             # Trigger level up notification via WebSocket
             try:
@@ -34,7 +36,9 @@ class UserService:
                             'data': {
                                 'old_level': old_level,
                                 'new_level': new_level,
-                                'current_xp': user.xp
+                                'current_xp': user.xp,
+                                'diamond_bonus': diamond_bonus,
+                                'points': user.points
                             }
                         }
                     )
@@ -43,3 +47,13 @@ class UserService:
             
         user.save(update_fields=['xp', 'level', 'points'])
         return user.level
+
+    @staticmethod
+    @transaction.atomic
+    def add_points(user: CustomUser, amount: int):
+        """
+        Adds points (diamonds) to the user explicitly.
+        """
+        user.points += amount
+        user.save(update_fields=['points'])
+        return user.points

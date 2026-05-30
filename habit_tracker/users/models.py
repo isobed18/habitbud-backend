@@ -17,6 +17,7 @@ class CustomUser(AbstractUser):
     xp = models.PositiveIntegerField(default=0)
     level = models.PositiveIntegerField(default=1)
     points = models.PositiveIntegerField(default=0)
+    streak_freezes = models.PositiveIntegerField(default=0)
     
     # Settings
     timezone = models.CharField(max_length=50, default='Europe/Istanbul')
@@ -33,6 +34,62 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.username
+
+    def check_and_apply_streak_freeze(self):
+        import pytz
+        from django.utils import timezone
+        from datetime import timedelta
+        from habits.models import Habit, HabitCompletion
+        from users.notifications import notify
+
+        try:
+            user_tz = pytz.timezone(self.timezone)
+            local_now = timezone.now().astimezone(user_tz)
+        except Exception:
+            local_now = timezone.now()
+            
+        local_today = local_now.date()
+        local_yesterday = local_today - timedelta(days=1)
+
+        # If already frozen for yesterday, don't freeze again
+        if StreakFreezeUsage.objects.filter(user=self, date=local_yesterday).exists():
+            return
+
+        # Check if they have any daily habits
+        daily_habits = Habit.objects.filter(user=self, frequency='daily')
+        if not daily_habits.exists():
+            return
+
+        # Did they miss completing any of their daily habits yesterday?
+        has_missed_habit = False
+        for habit in daily_habits:
+            # Check if completed yesterday
+            completed_yesterday = HabitCompletion.objects.filter(habit=habit, completed_at=local_yesterday).exists()
+            if not completed_yesterday:
+                has_missed_habit = True
+                break
+
+        if has_missed_habit:
+            if self.streak_freezes > 0:
+                self.streak_freezes -= 1
+                self.save(update_fields=['streak_freezes'])
+                
+                StreakFreezeUsage.objects.create(user=self, date=local_yesterday)
+                
+                # Recalculate streaks for all daily habits to update their cached values
+                for habit in daily_habits:
+                    habit.streak = habit.calculate_streak()
+                    if habit.streak > habit.best_streak:
+                        habit.best_streak = habit.streak
+                    habit.verification_streak = habit.calculate_verification_streak()
+                    habit.save(update_fields=['streak', 'best_streak', 'verification_streak'])
+
+                notify(
+                    self,
+                    "Seri Dondurucu Kullanıldı! ❄️",
+                    "Dün bir check-in yapmayı kaçırdın ama Seri Dondurucu serini korudu!",
+                    ntype='STREAK'
+                )
 
 
 class Block(models.Model):
@@ -123,3 +180,18 @@ class DeviceToken(models.Model):
 
     def __str__(self):
         return f"{self.user.username} · {self.platform} · {self.token[:20]}…"
+
+
+class StreakFreezeUsage(models.Model):
+    """Tracks which days a user froze their streak."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='streak_freeze_usages')
+    date = models.DateField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'date')
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"{self.user.username} froze {self.date}"

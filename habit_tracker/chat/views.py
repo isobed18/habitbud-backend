@@ -332,11 +332,21 @@ class VerifyProofView(APIView):
                 GamificationEngine.BASE_VERIFY_XP, habit_streak, friend_streak
             )
             UserService.add_xp(proof_message.sender, sender_xp)
+            
+            # Award points (diamonds) decoupled from XP
+            UserService.add_points(proof_message.sender, 1)
+            UserService.add_points(request.user, 1)
 
             # VERIFIER: base_verifier × friend_streak_mult
             verifier_xp = int(round(GamificationEngine.BASE_VERIFIER_XP *
                             GamificationEngine.calculate_friend_streak_multiplier(friend_streak)))
             UserService.add_xp(request.user, verifier_xp)
+
+            is_milestone = bool(habit and GamificationEngine.is_milestone(habit_streak))
+            milestone_bonus = 0
+            if is_milestone:
+                milestone_bonus = habit_streak * 2
+                UserService.add_points(proof_message.sender, milestone_bonus)
 
             # Tell the sender their check was approved, and celebrate milestones.
             from users.notifications import notify
@@ -344,29 +354,31 @@ class VerifyProofView(APIView):
             notify(
                 proof_message.sender,
                 "Check'in onaylandı! 🔥",
-                f"{request.user.username}, {habit_name} check'ini onayladı. +{sender_xp} XP!",
+                f"{request.user.username}, {habit_name} check'ini onayladı. +{sender_xp} XP ve +1 💎 kazandın!",
                 ntype='CHECK',
-                data={'habit_id': str(habit.id) if habit else None, 'xp': sender_xp},
+                data={'habit_id': str(habit.id) if habit else None, 'xp': sender_xp, 'points': 1},
             )
-            is_milestone = bool(habit and GamificationEngine.is_milestone(habit_streak))
             if is_milestone:
                 tier, tier_name = GamificationEngine.get_streak_tier(habit_streak)
                 notify(
                     proof_message.sender,
                     f"{habit_streak} günlük seri! 🔥",
-                    f"{habit_name}: üst üste {habit_streak} gün. {tier_name} seviyesine ulaştın!",
+                    f"{habit_name}: üst üste {habit_streak} gün. {tier_name} seviyesine ulaştın! Ekstra +{milestone_bonus} 💎 kazandın!",
                     ntype='STREAK',
-                    data={'habit_id': str(habit.id), 'streak': habit_streak, 'tier': tier},
+                    data={'habit_id': str(habit.id), 'streak': habit_streak, 'tier': tier, 'points_bonus': milestone_bonus},
                 )
 
             reward_info = {
                 'sender_xp': sender_xp,
                 'verifier_xp': verifier_xp,
+                'sender_diamonds': 1 + milestone_bonus,
+                'verifier_diamonds': 1,
                 'habit_multiplier': h_mult,
                 'friend_multiplier': f_mult,
                 'habit_streak': habit_streak,
                 'friend_streak': friend_streak,
                 'milestone': is_milestone,
+                'milestone_bonus': milestone_bonus,
             }
 
         else:

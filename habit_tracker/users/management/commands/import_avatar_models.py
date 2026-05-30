@@ -58,7 +58,10 @@ class Command(BaseCommand):
                 obj.glb.save(fname, File(fh), save=True)
             created += was_created
             updated += not was_created
-            self.stdout.write(f"  {'＋' if was_created else '↻'} {emoji} {name}")
+            try:
+                self.stdout.write(f"  {'+' if was_created else '~'} {emoji} {name}")
+            except Exception:
+                self.stdout.write(f"  {'+' if was_created else '~'} {name}")
 
         self.stdout.write(self.style.SUCCESS(
             f"Imported {len(glbs)} GLB(s): {created} new, {updated} updated."

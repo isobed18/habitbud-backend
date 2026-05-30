@@ -71,7 +71,12 @@ class HabitListView(APIView):
                         habit.total_time = timedelta(0)
                         
         else:
-            # LIVE VIEW: Check and reset progress if needed
+            # LIVE VIEW: Apply streak freeze and check/reset progress if needed
+            if hasattr(request.user, 'check_and_apply_streak_freeze'):
+                try:
+                    request.user.check_and_apply_streak_freeze()
+                except Exception as e:
+                    print(f"Error applying streak freeze: {e}")
             for habit in habits:
                 habit.check_and_reset_progress()
             

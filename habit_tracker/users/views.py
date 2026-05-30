@@ -330,3 +330,23 @@ class BlockView(APIView):
         from .models import Block
         Block.objects.filter(blocker=request.user, blocked_id=user_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class BuyStreakFreezeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        cost = 20
+        if user.points < cost:
+            return Response({'error': 'Yetersiz elmas. Seri Dondurucu satın almak için 20 elmas gerekiyor.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.points -= cost
+        user.streak_freezes += 1
+        user.save(update_fields=['points', 'streak_freezes'])
+        
+        return Response({
+            'message': 'Seri Dondurucu başarıyla satın alındı! ❄️',
+            'points': user.points,
+            'streak_freezes': user.streak_freezes
+        }, status=status.HTTP_200_OK)
