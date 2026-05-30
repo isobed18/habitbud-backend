@@ -63,6 +63,16 @@ class ConversationListView(generics.ListAPIView):
         return self.request.user.conversations.all().distinct()
 
 
+class ConversationDetailView(generics.RetrieveAPIView):
+    """Conversation info (participants, group name, is_group) for the chat header."""
+    serializer_class = ConversationSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_url_kwarg = 'conversation_id'
+
+    def get_queryset(self):
+        return self.request.user.conversations.all().distinct()
+
+
 class CreateRoomView(APIView):
     """Create a group chat room with the given friends.
 

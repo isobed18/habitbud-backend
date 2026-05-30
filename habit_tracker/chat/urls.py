@@ -2,6 +2,7 @@
 from django.urls import path
 from .views import (
     ConversationListView,
+    ConversationDetailView,
     MessageListView,
     MessageCreateView,
     StartConversationView,
@@ -21,6 +22,7 @@ urlpatterns = [
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
     # Start or find a conversation with a user
     path('conversations/start/', StartConversationView.as_view(), name='start-conversation'),
+    path('conversations/<uuid:conversation_id>/', ConversationDetailView.as_view(), name='conversation-detail'),
 
     # Group chat rooms
     path('rooms/', CreateRoomView.as_view(), name='room-create'),
