@@ -4,7 +4,7 @@
 # and automatically runs the Django import_avatar_models command.
 # =============================================================================
 
-$WatchDir   = "C:\Users\ishak\Hunyuan3D-2\out_v2"
+$WatchDir   = "D:\Hunyuan3D-2\out_v2"
 $PythonExe  = "C:\Users\ishak\habitbud-backend\habit_tracker\venv\Scripts\python.exe"
 $ManagePy   = "C:\Users\ishak\habitbud-backend\habit_tracker\manage.py"
 $DelaySeconds = 5

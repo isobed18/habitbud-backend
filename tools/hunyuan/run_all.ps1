@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$Hunyuan = 'C:\Users\ishak\Hunyuan3D-2'
+$Hunyuan = 'D:\Hunyuan3D-2'
 $Backend = 'C:\Users\ishak\habitbud-backend\habit_tracker'
 $Input   = "$Backend\assets\animals_gemini_2d_v2"
 $Out     = "$Hunyuan\out"
