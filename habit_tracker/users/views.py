@@ -96,21 +96,27 @@ class LeaderboardView(APIView):
     def get(self, request):
         from friends.models import Friendship
 
-        friendships = Friendship.objects.filter(
-            (Q(from_user=request.user) | Q(to_user=request.user)),
-            status=Friendship.Status.ACCEPTED
-        )
-        
-        friends = []
-        for f in friendships:
-            if f.from_user == request.user:
-                friends.append(f.to_user)
+        scope = request.query_params.get('scope', 'friends')
+
+        if scope == 'global':
+            users = list(User.objects.order_by('-xp', 'username')[:50])
+        elif scope == 'region':
+            region = (request.user.region or '').strip()
+            if region:
+                users = list(User.objects.filter(region__iexact=region).order_by('-xp', 'username')[:50])
             else:
-                friends.append(f.from_user)
-        
-        users = list(friends) + [request.user]
-        users.sort(key=lambda u: u.xp, reverse=True)
-        
+                users = [request.user]  # no region set yet
+        else:  # friends (default): accepted friends + self
+            friendships = Friendship.objects.filter(
+                (Q(from_user=request.user) | Q(to_user=request.user)),
+                status=Friendship.Status.ACCEPTED
+            )
+            friends = []
+            for f in friendships:
+                friends.append(f.to_user if f.from_user == request.user else f.from_user)
+            users = list(friends) + [request.user]
+            users.sort(key=lambda u: u.xp, reverse=True)
+
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
 
