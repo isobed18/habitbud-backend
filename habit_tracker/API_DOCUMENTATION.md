@@ -15,8 +15,7 @@
 3. [Friends](#3-friends)
 4. [Chat & Conversations](#4-chat--conversations)
 5. [Stories](#5-stories)
-6. [Proof Submission & Verification](#6-proof-submission--verification)
-7. [~~AI Coach & Assistant~~](#7-ai-coach--assistant) *(Shelved - returns 503)*
+6. [Check Submission & Verification](#6-check-submission--verification)
 8. [Challenges & Rewards](#8-challenges--rewards)
 9. [WebSocket](#9-websocket)
 10. [Gamification Mechanics](#10-gamification-mechanics)
@@ -681,53 +680,6 @@
 
 ---
 
-## 7. AI Coach & Assistant
-
-### 7.1 AI Habit Coach
-**POST** `/chat/ai-coach/`
-
-Get personalized coaching advice. The AI now analyzes your **last 7 days of history** and **recent chat context** for trend-aware guidance.
-
-**Authentication:** Required
-
-**Request Body:**
-```json
-{
-  "habit_id": "uuid",
-  "message": "I keep forgetting to drink water in the afternoon."
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "advice": "Hydration is key! Since you have a 5-day streak but missed yesterday, try setting a phone alarm for 2 PM. You're doing great, Ishak!"
-}
-```
-
-### 7.2 AI Agent
-**POST** `/chat/ai-agent/`
-
-Execute complex objectives using the IO.net Custom Agent (Workflows).
-
-**Authentication:** Required
-
-**Request Body:**
-```json
-{
-  "objective": "Analyze my fitness goals and suggest a notification schedule.",
-  "instructions": "Be very specific and actionable."
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "status": "success",
-  "data": { ... agent output ... }
-}
-```
-
 ## 5. Stories
 
 ### 5.1 Create Story
@@ -782,10 +734,12 @@ Returns active (non-expired) stories from friends and self.
 
 ---
 
-## 6. Proof Submission & Verification
+## 6. Check Submission & Verification
 
-### 6.1 Submit Proof (Social)
-**POST** `/chat/proof/submit/`
+A "check" is a habit-proof snap sent to friends for approval.
+
+### 6.1 Submit Check
+**POST** `/chat/checks/submit/` (alias: `/chat/proof/submit/`)
 
 **Authentication:** Required
 
@@ -808,34 +762,8 @@ Returns active (non-expired) stories from friends and self.
 }
 ```
 
-### 6.2 Submit AI Proof (Solo)
-**POST** `/chat/proof/ai/`
-
-**Authentication:** Required
-
-**Request Body:** (multipart/form-data)
-- `habit_id`: uuid (required)
-- `proof_image`: File (required)
-
-**Response:** `200 OK`
-```json
-{
-    "mode": "ai_verification",
-    "ai_status": {
-        "verified": true,
-        "confidence": 0.95,
-        "reason": "Image consistent with habit..."
-    },
-    "xp_awarded": 20
-}
-```
-
-
-
----
-
-### 6.3 Verify/Reject Proof
-**POST** `/chat/proof/{message_id}/verify/`
+### 6.2 Verify/Reject Check
+**POST** `/chat/checks/{message_id}/verify/` (alias: `/chat/proof/{message_id}/verify/`)
 
 **Authentication:** Required
 
@@ -1296,12 +1224,27 @@ const ws = new WebSocket(`ws://localhost:8000/ws/chat/${conversationId}/?token=$
 
 ## Changelog
 
-### v2.0.0 (2026-02-25) - Production Ready
+### v3.0.0 (2026-05-30) - No AI, Checks, Presets & Push
 
 **Breaking Changes:**
-- AI proof verification is **shelved** (endpoints return `503 Service Unavailable`)
-- Social proof no longer requires AI verification first
-- `posts` app removed
+- **All AI removed** — IO.net/OpenAI service, AI coach, AI agent, and AI proof
+  endpoints are deleted (not shelved). Verification is fully social.
+- Proof flow renamed to **"checks"**: use `/chat/checks/submit/` and
+  `/chat/checks/{id}/verify/` (old `/chat/proof/...` paths kept as aliases).
+
+**New Endpoints:**
+- `GET /habits/templates/` - Preset habit catalog
+- `POST /users/api/push-token/` - Register/unregister Expo push token
+- `POST /chat/rooms/` - Create a group chat room
+- `POST|DELETE /chat/rooms/{id}/membership/` - Join / leave a room
+
+**Enhancements:**
+- Rebalanced GamificationEngine: +5 send, +10 approve, +3 verify, log streak multipliers, 5-day+ milestones
+- Habit-aware smart reminders + streak-at-risk nudges (`send_check_reminders`, run via cron)
+- Group chat rooms; conversation responses include `display_name` / `is_group`
+- Habits carry an `icon` (emoji); presets auto-create a reminder
+
+### v2.0.0 (2026-02-25) - Production Ready
 
 **New Endpoints:**
 - `GET /api/health/` - Health check
