@@ -66,6 +66,11 @@ def matte_export(mesh, out_path):
                 mat.metallicFactor = 0.0
             if hasattr(mat, 'roughnessFactor'):
                 mat.roughnessFactor = 0.9
+            # Downscale the base-color texture for lighter mobile GLBs.
+            tex = getattr(mat, 'baseColorTexture', None)
+            if tex is not None and hasattr(tex, 'size') and max(tex.size) > 512:
+                from PIL import Image as _Img
+                mat.baseColorTexture = tex.convert('RGB').resize((512, 512), _Img.LANCZOS)
     except Exception:
         pass
     try:
