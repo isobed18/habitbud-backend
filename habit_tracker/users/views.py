@@ -139,9 +139,12 @@ class PublicUserProfileView(APIView):
             "points": target_user.points,
             "avatar": target_user.avatar.url if target_user.avatar else None,
             "is_friend": is_friend,
+            "is_private": target_user.is_private,
+            "region": target_user.region,
             "habits": []
         }
 
+        # Private profiles only reveal habits/stats to friends (or self).
         if is_friend or request.user == target_user:
              habits = Habit.objects.filter(user=target_user)
              data["habits"] = HabitSerializer(habits, many=True).data
@@ -261,9 +264,51 @@ class UserSearchView(APIView):
         if len(query) < 2:
             return Response({'error': 'Search query must be at least 2 characters.'}, status=status.HTTP_400_BAD_REQUEST)
         
+        from .models import Block
+        blocked_ids = list(Block.objects.filter(
+            Q(blocker=request.user) | Q(blocked=request.user)
+        ).values_list('blocker_id', 'blocked_id'))
+        exclude_ids = {request.user.id}
+        for a, b in blocked_ids:
+            exclude_ids.add(a); exclude_ids.add(b)
+
         users = User.objects.filter(
             username__icontains=query
-        ).exclude(id=request.user.id)[:20]
-        
+        ).exclude(id__in=exclude_ids)[:20]
+
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
+
+
+class BlockListView(APIView):
+    """List users the current user has blocked."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import Block
+        blocked = User.objects.filter(blocked_by__blocker=request.user)
+        return Response(UserSerializer(blocked, many=True).data)
+
+
+class BlockView(APIView):
+    """Block (POST) or unblock (DELETE) a user. Blocking also removes any
+    existing friendship between the two users."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, user_id):
+        from .models import Block
+        from friends.models import Friendship
+        if str(user_id) == str(request.user.id):
+            return Response({'error': 'Cannot block yourself.'}, status=status.HTTP_400_BAD_REQUEST)
+        target = get_object_or_404(User, id=user_id)
+        Block.objects.get_or_create(blocker=request.user, blocked=target)
+        # Drop any friendship in either direction.
+        Friendship.objects.filter(
+            (Q(from_user=request.user, to_user=target) | Q(from_user=target, to_user=request.user))
+        ).delete()
+        return Response({'status': 'blocked'})
+
+    def delete(self, request, user_id):
+        from .models import Block
+        Block.objects.filter(blocker=request.user, blocked_id=user_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -30,13 +30,24 @@ class StartConversationView(APIView):
         if user == target_user:
             return Response({'error': 'You cannot start a conversation with yourself.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Block check (either direction).
+        from users.models import Block
+        if Block.objects.filter(
+            (Q(blocker=user, blocked=target_user) | Q(blocker=target_user, blocked=user))
+        ).exists():
+            return Response({'error': 'Bu kullanıcıya mesaj gönderemezsin.'}, status=status.HTTP_403_FORBIDDEN)
+
         is_friend = Friendship.objects.filter(
             (Q(from_user=user, to_user=target_user) | Q(from_user=target_user, to_user=user)),
             status=Friendship.Status.ACCEPTED
         ).exists()
 
-        if not is_friend:
-            return Response({'error': 'You can only start conversations with friends.'}, status=status.HTTP_403_FORBIDDEN)
+        # Respect the target's message-privacy setting.
+        privacy = getattr(target_user, 'message_privacy', 'everyone')
+        if privacy == 'nobody':
+            return Response({'error': 'Bu kullanıcı mesaj almıyor.'}, status=status.HTTP_403_FORBIDDEN)
+        if privacy == 'friends' and not is_friend:
+            return Response({'error': 'Bu kullanıcıya yalnızca arkadaşları mesaj atabilir.'}, status=status.HTTP_403_FORBIDDEN)
 
         conversation = Conversation.objects.annotate(participant_count=Count('participants')).filter(
             participants=user

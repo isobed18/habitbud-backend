@@ -29,6 +29,13 @@ class FriendRequestView(APIView):
         if from_user == to_user:
             return Response({'error': 'You cannot send a friend request to yourself.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        from users.models import Block
+        from django.db.models import Q as _Q
+        if Block.objects.filter(
+            (_Q(blocker=from_user, blocked=to_user) | _Q(blocker=to_user, blocked=from_user))
+        ).exists():
+            return Response({'error': 'Bu kullanıcıyla arkadaş olamazsın.'}, status=status.HTTP_403_FORBIDDEN)
+
         # Check if a request already exists
         if Friendship.objects.filter(from_user=from_user, to_user=to_user).exists() or \
            Friendship.objects.filter(from_user=to_user, to_user=from_user).exists():

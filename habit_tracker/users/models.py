@@ -17,9 +17,33 @@ class CustomUser(AbstractUser):
     
     # Settings
     timezone = models.CharField(max_length=50, default='Europe/Istanbul')
+    region = models.CharField(max_length=80, blank=True, default='', help_text="Country/city for regional leaderboards")
+
+    # Privacy (Instagram/Snapchat-style)
+    MESSAGE_PRIVACY_CHOICES = [
+        ('everyone', 'Everyone'),
+        ('friends', 'Friends only'),
+        ('nobody', 'Nobody'),
+    ]
+    is_private = models.BooleanField(default=False, help_text="Private profiles hide habits/stats from non-friends")
+    message_privacy = models.CharField(max_length=10, choices=MESSAGE_PRIVACY_CHOICES, default='everyone')
 
     def __str__(self):
         return self.username
+
+
+class Block(models.Model):
+    """A user blocking another. Blocked users cannot message or friend you."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    blocker = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='blocking')
+    blocked = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='blocked_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('blocker', 'blocked')
+
+    def __str__(self):
+        return f"{self.blocker.username} blocked {self.blocked.username}"
 
 class Notification(models.Model):
     TYPE_CHOICES = [

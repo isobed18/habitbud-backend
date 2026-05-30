@@ -14,6 +14,10 @@ urlpatterns = [
     path('api/profile/<uuid:user_id>/', views.PublicUserProfileView.as_view(), name='public-profile'),
     path('api/search/', views.UserSearchView.as_view(), name='user-search'),
 
+    # Blocking
+    path('api/blocks/', views.BlockListView.as_view(), name='block-list'),
+    path('api/blocks/<uuid:user_id>/', views.BlockView.as_view(), name='block-user'),
+
     # Notifications
     path('api/notifications/', views.NotificationListView.as_view(), name='notification-list'),
     path('api/notifications/<uuid:notification_id>/read/', views.NotificationMarkReadView.as_view(), name='notification-read'),
