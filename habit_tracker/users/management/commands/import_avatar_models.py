@@ -38,6 +38,35 @@ def _base_key(name):
     return re.sub(r'[^a-z]', '', name.lower())
 
 
+def _face_crop_bytes(path):
+    """Return a square, face-close PNG (top of the subject) for use as a snapshot.
+    Finds the subject via a corner flood-fill, then crops the top square (head)."""
+    import io
+    from PIL import Image, ImageDraw, ImageChops
+    img = Image.open(path).convert('RGB')
+    w, h = img.size
+    flood = img.copy()
+    for c in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+        try:
+            ImageDraw.floodfill(flood, c, (255, 0, 255), thresh=40)
+        except Exception:
+            pass
+    sentinel = Image.new('RGB', (w, h), (255, 0, 255))
+    mask = ImageChops.difference(flood, sentinel).convert('L').point(lambda p: 255 if p > 12 else 0)
+    bbox = mask.getbbox() or (0, 0, w, h)
+    l, t, r, b = bbox
+    sw, sh = r - l, b - t
+    side = max(40, min(sw, sh))          # top square ≈ head + shoulders
+    cx = (l + r) // 2
+    left = max(0, min(cx - side // 2, w - side))
+    top = max(0, t - int(side * 0.04))   # tiny headroom
+    crop = img.crop((left, top, left + side, top + side)).resize((256, 256), Image.LANCZOS)
+    buf = io.BytesIO()
+    crop.save(buf, 'PNG')
+    buf.seek(0)
+    return buf
+
+
 class Command(BaseCommand):
     help = "Import GLB files into the AvatarModel catalog (for Avatar Studio 3D)."
 
@@ -91,8 +120,12 @@ class Command(BaseCommand):
             # Attach the matching 2D source image as a face snapshot/thumbnail.
             tpath = thumbs.get(name.replace(' ', '_').lower())
             if tpath:
-                with open(tpath, 'rb') as th:
-                    obj.thumbnail.save(os.path.basename(tpath), File(th), save=True)
+                try:
+                    buf = _face_crop_bytes(tpath)
+                    obj.thumbnail.save(f"{slug}_face.png", File(buf), save=True)
+                except Exception:
+                    with open(tpath, 'rb') as th:  # fallback: full image
+                        obj.thumbnail.save(os.path.basename(tpath), File(th), save=True)
             created += was_created
             updated += not was_created
             try:
