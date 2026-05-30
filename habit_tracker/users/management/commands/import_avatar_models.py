@@ -10,6 +10,7 @@ Avatar Studio (3D mode):
 Emoji/scale are guessed from the filename when possible.
 """
 import os
+import re
 import shutil
 
 from django.conf import settings
@@ -19,10 +20,22 @@ from django.utils.text import slugify
 
 from users.models import AvatarModel
 
+# Keyed by the alpha-only base of the filename (digits/underscores/parens stripped).
 EMOJI = {
-    'fox': '🦊', 'cat': '🐱', 'bear': '🐻', 'panda': '🐼', 'rabbit': '🐰',
-    'frog': '🐸', 'koala': '🐨', 'deer': '🦌', 'chick': '🐤', 'hamster': '🐹',
+    'fox': '🦊', 'cat': '🐱', 'pinkcat': '🐱', 'bear': '🐻', 'panda': '🐼',
+    'rabbit': '🐰', 'frog': '🐸', 'koala': '🐨', 'deer': '🦌', 'chick': '🐤',
+    'hamster': '🐹',
 }
+NAME_TR = {
+    'fox': 'Tilki', 'cat': 'Kedi', 'pinkcat': 'Pembe Kedi', 'bear': 'Ayı',
+    'panda': 'Panda', 'rabbit': 'Tavşan', 'frog': 'Kurbağa', 'koala': 'Koala',
+    'deer': 'Geyik', 'chick': 'Civciv', 'hamster': 'Hamster',
+}
+
+
+def _base_key(name):
+    """fox2 / bear_(2) / pinkcat2 -> 'fox' / 'bear' / 'pinkcat' (alpha only)."""
+    return re.sub(r'[^a-z]', '', name.lower())
 
 
 class Command(BaseCommand):
@@ -48,12 +61,19 @@ class Command(BaseCommand):
         for order, fname in enumerate(sorted(glbs)):
             name = os.path.splitext(fname)[0]
             slug = slugify(name)
-            emoji = EMOJI.get(name.lower(), '')
+            base = _base_key(name)
+            emoji = EMOJI.get(base, '')
+            display = NAME_TR.get(base, base.capitalize() or name)
             obj, was_created = AvatarModel.objects.get_or_create(
                 slug=slug,
-                defaults={'name': name.capitalize(), 'emoji': emoji,
+                defaults={'name': display, 'emoji': emoji,
                           'scale': options['scale'], 'sort_order': order, 'is_active': True},
             )
+            # Refresh metadata on re-import too.
+            obj.name = display
+            obj.emoji = emoji
+            obj.sort_order = order
+            obj.is_active = True
             with open(os.path.join(folder, fname), 'rb') as fh:
                 obj.glb.save(fname, File(fh), save=True)
             created += was_created

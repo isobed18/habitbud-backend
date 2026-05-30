@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 
 $Hunyuan = 'C:\Users\ishak\Hunyuan3D-2'
 $Backend = 'C:\Users\ishak\habitbud-backend\habit_tracker'
-$Input   = "$Backend\assets\animals_gemini_2d"
+$Input   = "$Backend\assets\animals_gemini_2d_v2"
 $Out     = "$Hunyuan\out"
 
 # Keep the multi-GB model cache off the (full) C: drive.
