@@ -55,6 +55,26 @@ def bg_to_alpha(path):
     return canvas
 
 
+def matte_export(mesh, out_path):
+    """Hunyuan exports materials as metallic=1 with no vertex normals, which look
+    dark in any PBR viewer (Three.js, Unity, Blender preview). Force matte plush
+    materials and ensure normals so the baked colors read correctly everywhere."""
+    try:
+        mat = getattr(mesh.visual, 'material', None)
+        if mat is not None:
+            if hasattr(mat, 'metallicFactor'):
+                mat.metallicFactor = 0.0
+            if hasattr(mat, 'roughnessFactor'):
+                mat.roughnessFactor = 0.9
+    except Exception:
+        pass
+    try:
+        _ = mesh.vertex_normals  # triggers computation so they get exported
+    except Exception:
+        pass
+    mesh.export(out_path)
+
+
 def worker_main(queue, out_dir, steps, octree, texture, worker_id):
     import torch
     from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
@@ -87,7 +107,7 @@ def worker_main(queue, out_dir, steps, octree, texture, worker_id):
                          num_chunks=20000, generator=torch.manual_seed(42), output_type='trimesh')[0]
             if paint is not None:
                 mesh = paint(mesh, image=img)
-            mesh.export(out_path)
+            matte_export(mesh, out_path)
             print(f"[Worker {worker_id}]   -> {out_path}  ({time.time() - t:.1f}s)")
         except Exception as exc:
             print(f"[Worker {worker_id}]   FAILED {name}: {exc}")
@@ -164,7 +184,7 @@ def main():
                              num_chunks=20000, generator=torch.manual_seed(42), output_type='trimesh')[0]
                 if paint is not None:
                     mesh = paint(mesh, image=img)
-                mesh.export(out_path)
+                matte_export(mesh, out_path)
                 print(f"  -> {out_path}  ({time.time() - t:.1f}s)")
             except Exception as exc:
                 print(f"  FAILED {name}: {exc}")
