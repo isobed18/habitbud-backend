@@ -45,6 +45,9 @@ class Command(BaseCommand):
         default_dir = os.path.join(settings.BASE_DIR, '..', 'tools', 'hunyuan', 'out')
         parser.add_argument('--dir', default=default_dir, help="Folder containing .glb files")
         parser.add_argument('--scale', type=float, default=1.0, help="Render scale hint")
+        parser.add_argument('--thumbs-dir', default=None,
+                            help="Folder of 2D source images to use as face snapshots "
+                                 "(matched by base filename). E.g. the Gemini PNGs.")
 
     def handle(self, *args, **options):
         folder = os.path.abspath(options['dir'])
@@ -56,6 +59,15 @@ class Command(BaseCommand):
         if not glbs:
             self.stdout.write(self.style.WARNING(f"No .glb files in {folder}"))
             return
+
+        # Build a {base_filename: path} map of 2D source images for thumbnails.
+        thumbs = {}
+        tdir = options.get('thumbs_dir')
+        if tdir and os.path.isdir(tdir):
+            for tf in os.listdir(tdir):
+                tb, te = os.path.splitext(tf)
+                if te.lower() in ('.png', '.jpg', '.jpeg', '.webp'):
+                    thumbs[tb.replace(' ', '_').lower()] = os.path.join(tdir, tf)
 
         created, updated = 0, 0
         for order, fname in enumerate(sorted(glbs)):
@@ -76,6 +88,11 @@ class Command(BaseCommand):
             obj.is_active = True
             with open(os.path.join(folder, fname), 'rb') as fh:
                 obj.glb.save(fname, File(fh), save=True)
+            # Attach the matching 2D source image as a face snapshot/thumbnail.
+            tpath = thumbs.get(name.replace(' ', '_').lower())
+            if tpath:
+                with open(tpath, 'rb') as th:
+                    obj.thumbnail.save(os.path.basename(tpath), File(th), save=True)
             created += was_created
             updated += not was_created
             try:
