@@ -144,6 +144,7 @@ class PublicUserProfileView(APIView):
             "xp": target_user.xp,
             "points": target_user.points,
             "avatar": target_user.avatar.url if target_user.avatar else None,
+            "avatar_config": target_user.avatar_config,
             "is_friend": is_friend,
             "is_private": target_user.is_private,
             "region": target_user.region,

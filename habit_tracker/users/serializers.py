@@ -8,7 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'bio', 'xp', 'level', 'points', 'avatar',
-                  'region', 'is_private', 'message_privacy')
+                  'avatar_config', 'region', 'is_private', 'message_privacy')
         read_only_fields = ('id', 'xp', 'level', 'points')
 
 class UserRegistrationSerializer(serializers.ModelSerializer):

@@ -8,6 +8,9 @@ class CustomUser(AbstractUser):
     
     bio = models.TextField(max_length=500, blank=True, null=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    # JSON config for a generated/dress-up avatar (style, seed, equipped items).
+    # Stored as a JSON string; empty means "use uploaded avatar or letter".
+    avatar_config = models.TextField(blank=True, default='')
     groups = models.ManyToManyField('groups.Group', related_name='user_groups')
     
     # Gamification
