@@ -44,6 +44,18 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--dir', required=True)
         parser.add_argument('--assign-to', default=None, help="Username to grant all items to")
+        parser.add_argument('--thumbs-dir', default=None, help="2D source images for item icons")
+
+    @staticmethod
+    def _icon_bytes(path):
+        import io
+        from PIL import Image
+        img = Image.open(path).convert('RGB')
+        w, h = img.size
+        s = min(w, h)
+        crop = img.crop(((w - s) // 2, (h - s) // 2, (w + s) // 2, (h + s) // 2)).resize((256, 256), Image.LANCZOS)
+        buf = io.BytesIO(); crop.save(buf, 'PNG'); buf.seek(0)
+        return buf
 
     def handle(self, *args, **opts):
         folder = os.path.abspath(opts['dir'])
@@ -53,6 +65,15 @@ class Command(BaseCommand):
         glbs = [f for f in os.listdir(folder) if f.lower().endswith('.glb')]
         if not glbs:
             self.stdout.write(self.style.WARNING("No .glb files")); return
+
+        # Map base filename -> 2D source image for item icons.
+        thumbs = {}
+        tdir = opts.get('thumbs_dir')
+        if tdir and os.path.isdir(tdir):
+            for tf in os.listdir(tdir):
+                tb, te = os.path.splitext(tf)
+                if te.lower() in ('.png', '.jpg', '.jpeg', '.webp'):
+                    thumbs[_base(tb)] = os.path.join(tdir, tf)
 
         created = []
         for fname in sorted(glbs):
@@ -67,6 +88,12 @@ class Command(BaseCommand):
             obj.item_scale = scale
             with open(os.path.join(folder, fname), 'rb') as fh:
                 obj.model_glb.save(fname, File(fh), save=True)
+            tpath = thumbs.get(base)
+            if tpath:
+                try:
+                    obj.image.save(f"{base}_icon.png", File(self._icon_bytes(tpath)), save=True)
+                except Exception as e:
+                    self.stdout.write(f"    icon warn {base}: {e}")
             created.append(obj)
             self.stdout.write(f"  {'+' if was_new else '~'} {name} [{anchor}]")
 
