@@ -15,8 +15,11 @@ class Item(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to='items/', null=True, blank=True)
+    # Optional 3D model (GLB) — e.g. generated with Hunyuan3D, served from media/.
+    model_glb = models.FileField(upload_to='models/items/', null=True, blank=True)
+    model_url = models.URLField(blank=True, default='', help_text="External GLB URL (alternative to uploaded file)")
     rarity = models.CharField(max_length=20, choices=RARITY_CHOICES, default='common')
-    
+
     def __str__(self):
         return f"{self.name} ({self.rarity})"
 

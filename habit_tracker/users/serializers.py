@@ -29,7 +29,32 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(**validated_data)
         return user
 
-from .models import Reminder, Notification
+from .models import Reminder, Notification, AvatarModel
+
+
+class AvatarModelSerializer(serializers.ModelSerializer):
+    glb = serializers.SerializerMethodField()
+    thumbnail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AvatarModel
+        fields = ['id', 'slug', 'name', 'emoji', 'glb', 'glb_url', 'thumbnail', 'scale']
+
+    def get_glb(self, obj):
+        if obj.glb:
+            try:
+                return obj.glb.url
+            except Exception:
+                return None
+        return None
+
+    def get_thumbnail(self, obj):
+        if obj.thumbnail:
+            try:
+                return obj.thumbnail.url
+            except Exception:
+                return None
+        return None
 
 class ReminderSerializer(serializers.ModelSerializer):
     class Meta:

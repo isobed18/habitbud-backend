@@ -287,6 +287,17 @@ class UserSearchView(APIView):
         return Response(serializer.data)
 
 
+class AvatarModelListView(APIView):
+    """List active 3D avatar base models for the Avatar Studio."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import AvatarModel
+        from .serializers import AvatarModelSerializer
+        qs = AvatarModel.objects.filter(is_active=True)
+        return Response(AvatarModelSerializer(qs, many=True, context={'request': request}).data)
+
+
 class BlockListView(APIView):
     """List users the current user has blocked."""
     permission_classes = [IsAuthenticated]

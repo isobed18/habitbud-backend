@@ -89,6 +89,27 @@ class Reminder(models.Model):
         return f"Reminder for {self.user.username} at {self.time}"
 
 
+class AvatarModel(models.Model):
+    """A 3D avatar base character (GLB), e.g. a Hunyuan3D-generated plush animal.
+    Served from media/ and listed for the in-app Avatar Studio (3D mode)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    slug = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=80)
+    emoji = models.CharField(max_length=8, blank=True, default='')
+    glb = models.FileField(upload_to='models/avatars/', null=True, blank=True)
+    glb_url = models.URLField(blank=True, default='', help_text="External GLB URL (alternative to uploaded file)")
+    thumbnail = models.ImageField(upload_to='models/avatar_thumbs/', null=True, blank=True)
+    scale = models.FloatField(default=1.0, help_text="Render scale hint for the RN viewer")
+    sort_order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return f"{self.emoji} {self.name}".strip()
+
+
 class DeviceToken(models.Model):
     """An Expo push token registered by a user's device."""
     PLATFORM_CHOICES = [('ios', 'iOS'), ('android', 'Android'), ('web', 'Web')]

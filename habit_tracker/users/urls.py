@@ -26,6 +26,9 @@ urlpatterns = [
     # Push notifications (Expo)
     path('api/push-token/', views.PushTokenView.as_view(), name='push-token'),
 
+    # 3D avatar base models (for Avatar Studio)
+    path('api/avatar-models/', views.AvatarModelListView.as_view(), name='avatar-models'),
+
     # Shortcuts
     path('friends/', FriendListView.as_view(), name='user-friends-alias'),
     path('items/', UserInventoryView.as_view(), name='user-items'),

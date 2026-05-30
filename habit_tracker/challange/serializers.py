@@ -3,9 +3,19 @@ from .models import Item, UserItem, ChallengeTemplate, Challenge
 from users.serializers import UserSerializer
 
 class ItemSerializer(serializers.ModelSerializer):
+    model_glb = serializers.SerializerMethodField()
+
     class Meta:
         model = Item
-        fields = ['id', 'name', 'description', 'image', 'rarity']
+        fields = ['id', 'name', 'description', 'image', 'rarity', 'model_glb', 'model_url']
+
+    def get_model_glb(self, obj):
+        if obj.model_glb:
+            try:
+                return obj.model_glb.url
+            except Exception:
+                return None
+        return None
 
 class ChallengeTemplateSerializer(serializers.ModelSerializer):
     reward_item = ItemSerializer(read_only=True)
