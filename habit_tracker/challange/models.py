@@ -20,6 +20,14 @@ class Item(models.Model):
     model_url = models.URLField(blank=True, default='', help_text="External GLB URL (alternative to uploaded file)")
     rarity = models.CharField(max_length=20, choices=RARITY_CHOICES, default='common')
 
+    # Where the item attaches on the avatar (approximate, non-rigged MVP).
+    ANCHOR_CHOICES = [
+        ('head', 'Head'), ('face', 'Face'), ('hand', 'Hand'),
+        ('back', 'Back'), ('neck', 'Neck'), ('none', 'None'),
+    ]
+    anchor = models.CharField(max_length=10, choices=ANCHOR_CHOICES, default='head')
+    item_scale = models.FloatField(default=1.0, help_text="Render scale of the item on the avatar")
+
     def __str__(self):
         return f"{self.name} ({self.rarity})"
 

@@ -7,7 +7,7 @@ class ItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Item
-        fields = ['id', 'name', 'description', 'image', 'rarity', 'model_glb', 'model_url']
+        fields = ['id', 'name', 'description', 'image', 'rarity', 'model_glb', 'model_url', 'anchor', 'item_scale']
 
     def get_model_glb(self, obj):
         if obj.model_glb:
