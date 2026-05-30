@@ -110,7 +110,7 @@ class LeaderboardView(APIView):
             friendships = Friendship.objects.filter(
                 (Q(from_user=request.user) | Q(to_user=request.user)),
                 status=Friendship.Status.ACCEPTED
-            )
+            ).select_related('from_user', 'to_user')
             friends = []
             for f in friendships:
                 friends.append(f.to_user if f.from_user == request.user else f.from_user)

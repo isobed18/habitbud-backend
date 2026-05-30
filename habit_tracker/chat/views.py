@@ -419,32 +419,41 @@ class StoryFeedView(APIView):
 
     def get(self, request):
         from django.utils import timezone
+        from collections import defaultdict
         user = self.request.user
         
         # 1. Provide a list of "users to watch" (Friends + Self)
         friends = Friendship.objects.filter(
             (Q(from_user=user) | Q(to_user=user)),
             status=Friendship.Status.ACCEPTED
-        )
+        ).select_related('from_user', 'to_user')
         
         watched_users = {user}
         for f in friends:
             watched_users.add(f.to_user if f.from_user == user else f.from_user)
             
+        # 2. Fetch all active stories for watched users in a single query
+        active_stories = Story.objects.filter(
+            user__in=watched_users,
+            expires_at__gt=timezone.now()
+        ).select_related('user').order_by('created_at')
+        
+        stories_by_user = defaultdict(list)
+        for story in active_stories:
+            stories_by_user[story.user_id].append(story)
+            
         feed_data = []
         
-        for watched_user in watched_users:
-            active_stories = Story.objects.filter(
-                user=watched_user,
-                expires_at__gt=timezone.now()
-            ).order_by('created_at') # Oldest first for chronological viewing
-            
-            if active_stories.exists():
+        # Order chronologically or user-first
+        sorted_users = sorted(list(watched_users), key=lambda u: (0 if u.id == user.id else 1, u.username))
+        for w_user in sorted_users:
+            user_stories = stories_by_user[w_user.id]
+            if user_stories:
                 feed_data.append({
-                    "user_id": watched_user.id,
-                    "username": watched_user.username,
-                    "avatar": watched_user.avatar.url if watched_user.avatar else None,
-                    "stories": StorySerializer(active_stories, many=True).data
+                    "user_id": w_user.id,
+                    "username": w_user.username,
+                    "avatar": w_user.avatar.url if w_user.avatar else None,
+                    "stories": StorySerializer(user_stories, many=True).data
                 })
         
         return Response(feed_data, status=status.HTTP_200_OK)

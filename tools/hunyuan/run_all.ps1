@@ -17,11 +17,12 @@ $env:HF_HOME = 'D:\hf_cache'
 $env:HF_HUB_CACHE = 'D:\hf_cache\hub'
 $env:HF_XET_CACHE = 'D:\hf_cache\xet'
 $env:PYTHONUTF8 = '1'
+$env:PYTHONUNBUFFERED = '1'
 
-Write-Host "==> 1/2 Generating GLBs (shape-only) from $Input"
+Write-Host "==> 1/2 Generating GLBs (with textures) from $Input"
 Copy-Item "$PSScriptRoot\generate.py" "$Hunyuan\generate.py" -Force
 Push-Location $Hunyuan
-conda run -n base --no-capture-output python generate.py --input "$Input" --out "$Out" --steps 30 --octree 256
+conda run -n base --no-capture-output python generate.py --input "$Input" --out "$Out" --steps 30 --octree 256 --texture
 Pop-Location
 
 Write-Host "==> 2/2 Importing GLBs into the app"

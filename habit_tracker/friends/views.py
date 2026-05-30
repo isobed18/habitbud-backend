@@ -104,35 +104,22 @@ class FriendListView(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        friendships = Friendship.objects.filter(
+        return Friendship.objects.filter(
             Q(from_user=user, status=Friendship.Status.ACCEPTED) |
             Q(to_user=user, status=Friendship.Status.ACCEPTED)
-        )
-        
-        friend_ids = []
-        for friendship in friendships:
-            if friendship.from_user_id == user.id:
-                friend_ids.append(friendship.to_user_id)
-            else:
-                friend_ids.append(friendship.from_user_id)
-                
-        return User.objects.filter(id__in=friend_ids)
+        ).select_related('from_user', 'to_user')
 
     def list(self, request, *args, **kwargs):
         """Override to include streak data per friend."""
-        queryset = self.get_queryset()
+        friendships = self.get_queryset()
         user = request.user
 
         friends_data = []
-        for friend in queryset:
-            friendship = Friendship.objects.filter(
-                (Q(from_user=user, to_user=friend) | Q(from_user=friend, to_user=user)),
-                status=Friendship.Status.ACCEPTED
-            ).first()
-
+        for friendship in friendships:
+            friend = friendship.to_user if friendship.from_user == user else friendship.from_user
             friend_data = FriendUserSerializer(friend).data
-            friend_data['friendship_streak'] = friendship.streak if friendship else 0
-            friend_data['last_interaction_date'] = friendship.last_interaction_date if friendship else None
+            friend_data['friendship_streak'] = friendship.streak
+            friend_data['last_interaction_date'] = friendship.last_interaction_date
             friends_data.append(friend_data)
 
         return Response(friends_data)

@@ -200,14 +200,9 @@ class UserInventoryView(generics.ListAPIView):
         user_items = UserItem.objects.filter(user=request.user).select_related('item')
         data = []
         for ui in user_items:
-            data.append({
-                "id": ui.item.id,
-                "name": ui.item.name,
-                "description": ui.item.description,
-                "image": ui.item.image.url if ui.item.image else None,
-                "rarity": ui.item.rarity,
-                "obtained_at": ui.obtained_at
-            })
+            item_data = ItemSerializer(ui.item, context={'request': request}).data
+            item_data['obtained_at'] = ui.obtained_at
+            data.append(item_data)
         return Response(data)
 
 class ChallengeCompletedListView(generics.ListAPIView):
