@@ -82,9 +82,33 @@ class HabitListView(APIView):
         serializer = HabitSerializer(data=request.data)
         if serializer.is_valid():
             # The serializer will create the habit and associate the user
-            serializer.save(user=request.user)
+            habit = serializer.save(user=request.user)
+
+            # If created from a preset, set up a habit-aware daily reminder.
+            template_slug = request.data.get('template_slug')
+            if template_slug:
+                self._create_reminder_from_template(request.user, habit, template_slug)
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def _create_reminder_from_template(self, user, habit, template_slug):
+        from datetime import time
+        from .models import HabitTemplate
+        from users.models import Reminder
+        try:
+            template = HabitTemplate.objects.get(slug=template_slug, is_active=True)
+        except HabitTemplate.DoesNotExist:
+            return
+        Reminder.objects.get_or_create(
+            user=user,
+            habit=habit,
+            defaults={
+                'title': f"{template.icon} {habit.name}",
+                'message': template.reminder_copy,
+                'time': template.reminder_time or time(19, 0),
+            },
+        )
 
 class HabitDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -200,7 +224,27 @@ class HabitStatsView(APIView):
             "completion_rate": round(completion_rate, 1),
             "calendar": calendar_data
         }
-        
+
         return Response(stats)
+
+
+from rest_framework import generics
+from rest_framework.permissions import AllowAny
+from .models import HabitTemplate
+from .serializers import HabitTemplateSerializer
+
+
+class HabitTemplateListView(generics.ListAPIView):
+    """Predefined habit catalog used by the 'add habit' preset picker."""
+    serializer_class = HabitTemplateSerializer
+    permission_classes = [AllowAny]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = HabitTemplate.objects.filter(is_active=True)
+        category = self.request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+        return qs
 
 

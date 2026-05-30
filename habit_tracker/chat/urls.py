@@ -5,11 +5,10 @@ from .views import (
     MessageListView,
     MessageCreateView,
     StartConversationView,
+    CreateRoomView,
+    RoomMembershipView,
     ProofSubmissionView,
-    AIProofSubmissionView,
     VerifyProofView,
-    AICoachView,
-    AIAgentView,
     StoryCreateView,
     StoryFeedView,
     StoryLikeView,
@@ -22,17 +21,20 @@ urlpatterns = [
     # Start or find a conversation with a user
     path('conversations/start/', StartConversationView.as_view(), name='start-conversation'),
 
+    # Group chat rooms
+    path('rooms/', CreateRoomView.as_view(), name='room-create'),
+    path('rooms/<uuid:conversation_id>/membership/', RoomMembershipView.as_view(), name='room-membership'),
 
     # Get all messages for a conversation and create a new message
     path('conversations/<uuid:conversation_id>/messages/', MessageListView.as_view(), name='message-list'),
     path('conversations/<uuid:conversation_id>/messages/create/', MessageCreateView.as_view(), name='message-create'),
-    
-    # Proof submission and verification
-    path('proof/submit/', ProofSubmissionView.as_view(), name='proof-submit'), # Social Proof (Friends)
-    path('proof/ai/', AIProofSubmissionView.as_view(), name='proof-ai'), # AI Proof (Solo)
+
+    # Check submission and verification (a "check" = a habit proof snap sent to friends)
+    path('checks/submit/', ProofSubmissionView.as_view(), name='check-submit'),
+    path('checks/<uuid:message_id>/verify/', VerifyProofView.as_view(), name='check-verify'),
+    # Backwards-compatible aliases (old "proof" naming)
+    path('proof/submit/', ProofSubmissionView.as_view(), name='proof-submit'),
     path('proof/<uuid:message_id>/verify/', VerifyProofView.as_view(), name='proof-verify'),
-    path('ai-coach/', AICoachView.as_view(), name='ai-coach'),
-    path('ai-agent/', AIAgentView.as_view(), name='ai-agent'),
 
     # Stories
     path('stories/create/', StoryCreateView.as_view(), name='story-create'),

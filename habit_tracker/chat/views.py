@@ -47,12 +47,12 @@ class StartConversationView(APIView):
         ).first()
 
         if conversation:
-            serializer = ConversationSerializer(conversation)
+            serializer = ConversationSerializer(conversation, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
             new_conversation = Conversation.objects.create()
             new_conversation.participants.add(user, target_user)
-            serializer = ConversationSerializer(new_conversation)
+            serializer = ConversationSerializer(new_conversation, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class ConversationListView(generics.ListAPIView):
@@ -61,6 +61,53 @@ class ConversationListView(generics.ListAPIView):
 
     def get_queryset(self):
         return self.request.user.conversations.all().distinct()
+
+
+class CreateRoomView(APIView):
+    """Create a group chat room with the given friends.
+
+    POST { "name": "Gym Buddies", "participant_ids": ["uuid", ...] }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        name = (request.data.get('name') or '').strip()
+        participant_ids = request.data.get('participant_ids', []) or []
+        if not name:
+            return Response({'error': 'name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        room = Conversation.objects.create(name=name, is_group=True, created_by=request.user)
+        room.participants.add(request.user)
+
+        for uid in participant_ids:
+            try:
+                friend = User.objects.get(id=uid)
+            except (User.DoesNotExist, ValueError, TypeError):
+                continue
+            is_friend = Friendship.objects.filter(
+                (Q(from_user=request.user, to_user=friend) | Q(from_user=friend, to_user=request.user)),
+                status=Friendship.Status.ACCEPTED
+            ).exists()
+            if is_friend:
+                room.participants.add(friend)
+
+        serializer = ConversationSerializer(room, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class RoomMembershipView(APIView):
+    """Join (POST) or leave (DELETE) a group chat room."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, conversation_id, *args, **kwargs):
+        room = get_object_or_404(Conversation, id=conversation_id, is_group=True)
+        room.participants.add(request.user)
+        return Response(ConversationSerializer(room, context={'request': request}).data)
+
+    def delete(self, request, conversation_id, *args, **kwargs):
+        room = get_object_or_404(Conversation, id=conversation_id, is_group=True)
+        room.participants.remove(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class MessageListView(generics.ListAPIView):
     serializer_class = ChatMessageSerializer
@@ -164,8 +211,19 @@ class ProofSubmissionView(APIView):
             verification_status=ChatMessage.VerificationStatus.PENDING
         )
 
+        # Flat "paper-plane" reward for sending a check.
+        from users.gamification import GamificationEngine
+        from users.services import UserService
+        UserService.add_xp(request.user, GamificationEngine.BASE_SUBMIT_XP)
+
         self.broadcast_proof_message(proof_message)
-        return Response(ChatMessageSerializer(proof_message).data, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                **ChatMessageSerializer(proof_message).data,
+                'xp_earned': GamificationEngine.BASE_SUBMIT_XP,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     def broadcast_proof_message(self, message):
         channel_layer = get_channel_layer()
@@ -179,16 +237,6 @@ class ProofSubmissionView(APIView):
                 room_group_name,
                 {'type': 'chat_message', 'message': clean_message_data}
             )
-
-class AIProofSubmissionView(APIView):
-    """AI Proof - Currently shelved. Will return 503."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        return Response(
-            {'error': 'AI proof verification is currently unavailable. Please use social proof with friends.'},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
 
 class VerifyProofView(APIView):
     permission_classes = [IsAuthenticated]
@@ -206,6 +254,7 @@ class VerifyProofView(APIView):
         if request.user not in proof_message.conversation.participants.all():
             return Response({'error': 'Not a participant.'}, status=status.HTTP_403_FORBIDDEN)
 
+        reward_info = {}
         if action == 'verify':
             habit = proof_message.related_habit
             if habit:
@@ -241,19 +290,53 @@ class VerifyProofView(APIView):
                 GamificationEngine.BASE_VERIFY_XP, habit_streak, friend_streak
             )
             UserService.add_xp(proof_message.sender, sender_xp)
-            
+
             # VERIFIER: base_verifier × friend_streak_mult
-            verifier_xp = int(GamificationEngine.BASE_VERIFIER_XP * 
-                            GamificationEngine.calculate_friend_streak_multiplier(friend_streak))
+            verifier_xp = int(round(GamificationEngine.BASE_VERIFIER_XP *
+                            GamificationEngine.calculate_friend_streak_multiplier(friend_streak)))
             UserService.add_xp(request.user, verifier_xp)
+
+            # Tell the sender their check was approved, and celebrate milestones.
+            from users.notifications import notify
+            habit_name = habit.name if habit else 'habit'
+            notify(
+                proof_message.sender,
+                "Check approved! 🔥",
+                f"{request.user.username} approved your {habit_name} check. +{sender_xp} XP!",
+                ntype='CHECK',
+                data={'habit_id': str(habit.id) if habit else None, 'xp': sender_xp},
+            )
+            is_milestone = bool(habit and GamificationEngine.is_milestone(habit_streak))
+            if is_milestone:
+                tier, tier_name = GamificationEngine.get_streak_tier(habit_streak)
+                notify(
+                    proof_message.sender,
+                    f"{habit_streak}-day streak! 🔥",
+                    f"{habit_name}: {habit_streak} days in a row. You reached the {tier_name} tier!",
+                    ntype='STREAK',
+                    data={'habit_id': str(habit.id), 'streak': habit_streak, 'tier': tier},
+                )
+
+            reward_info = {
+                'sender_xp': sender_xp,
+                'verifier_xp': verifier_xp,
+                'habit_multiplier': h_mult,
+                'friend_multiplier': f_mult,
+                'habit_streak': habit_streak,
+                'friend_streak': friend_streak,
+                'milestone': is_milestone,
+            }
 
         else:
             proof_message.verification_status = ChatMessage.VerificationStatus.REJECTED
-        
+
         proof_message.save(update_fields=['verification_status'])
         self.broadcast_verification(proof_message)
-        
-        return Response(ChatMessageSerializer(proof_message).data, status=status.HTTP_200_OK)
+
+        return Response(
+            {**ChatMessageSerializer(proof_message).data, **reward_info},
+            status=status.HTTP_200_OK,
+        )
 
     def broadcast_verification(self, message):
         channel_layer = get_channel_layer()
@@ -267,26 +350,6 @@ class VerifyProofView(APIView):
                 room_group_name,
                 {'type': 'chat_message', 'message': clean_message_data}
             )
-
-class AICoachView(APIView):
-    """AI Coach - Currently shelved. Will return 503."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        return Response(
-            {'error': 'AI coaching is currently unavailable.'},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
-
-class AIAgentView(APIView):
-    """AI Agent - Currently shelved. Will return 503."""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        return Response(
-            {'error': 'AI agent is currently unavailable.'},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
 
 from .models import Story
 from .serializers import StorySerializer

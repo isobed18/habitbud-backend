@@ -185,6 +185,36 @@ class ReminderDeleteView(generics.DestroyAPIView):
         return Reminder.objects.filter(user=self.request.user)
 
 
+class PushTokenView(APIView):
+    """Register (or refresh) the caller's Expo push token.
+
+    POST { "token": "ExponentPushToken[...]", "platform": "ios|android|web" }
+    DELETE { "token": "..." } to unregister (e.g. on logout).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .models import DeviceToken
+        token = (request.data.get('token') or '').strip()
+        platform = request.data.get('platform', 'android')
+        if not token:
+            return Response({'error': 'token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # A token is unique to one device; reassign it to the current user.
+        DeviceToken.objects.update_or_create(
+            token=token,
+            defaults={'user': request.user, 'platform': platform},
+        )
+        return Response({'status': 'registered'}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        from .models import DeviceToken
+        token = (request.data.get('token') or '').strip()
+        if token:
+            DeviceToken.objects.filter(token=token, user=request.user).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 # ============================================================================
 # NOTIFICATIONS
 # ============================================================================

@@ -19,6 +19,10 @@ python manage.py migrate --noinput
 echo "🎯 Populating challenge templates and items..."
 python manage.py populate_challenges
 
+# Seed predefined habit templates
+echo "✅ Seeding habit templates..."
+python manage.py seed_habit_templates
+
 # Create demo users (optional - controlled by environment variable)
 if [ "$CREATE_DEMO_USERS" = "true" ]; then
     echo "👥 Creating demo users..."

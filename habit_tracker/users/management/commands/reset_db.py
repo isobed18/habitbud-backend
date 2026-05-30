@@ -23,7 +23,11 @@ class Command(BaseCommand):
         self.stdout.write('🎯 Populating challenges...')
         call_command('populate_challenges')
         self.stdout.write(self.style.SUCCESS('✅ Challenges populated.'))
-        
+
+        self.stdout.write('✅ Seeding habit templates...')
+        call_command('seed_habit_templates')
+        self.stdout.write(self.style.SUCCESS('✅ Habit templates seeded.'))
+
         if not options['no_demo']:
             self.stdout.write('👥 Creating demo users...')
             call_command('create_demo_users')

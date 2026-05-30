@@ -19,6 +19,9 @@ urlpatterns = [
     path('api/notifications/<uuid:notification_id>/read/', views.NotificationMarkReadView.as_view(), name='notification-read'),
     path('api/notifications/read-all/', views.NotificationMarkAllReadView.as_view(), name='notification-read-all'),
 
+    # Push notifications (Expo)
+    path('api/push-token/', views.PushTokenView.as_view(), name='push-token'),
+
     # Shortcuts
     path('friends/', FriendListView.as_view(), name='user-friends-alias'),
     path('items/', UserInventoryView.as_view(), name='user-items'),

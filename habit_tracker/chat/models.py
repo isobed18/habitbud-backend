@@ -8,9 +8,19 @@ import uuid
 class Conversation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="conversations")
+    # Group chat room support. 1:1 DMs leave these defaults.
+    name = models.CharField(max_length=100, blank=True, default='')
+    is_group = models.BooleanField(default=False)
+    avatar = models.ImageField(upload_to='room_avatars/', null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="created_rooms",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
+        if self.is_group:
+            return f"Room: {self.name or self.id}"
         return f"Conversation {self.id}"
 
 class ChatMessage(models.Model):

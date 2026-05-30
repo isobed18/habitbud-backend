@@ -33,11 +33,7 @@ class Habit(models.Model):
     verified_count = models.IntegerField(default=0, help_text="Friend-verified completion count.")
     verification_streak = models.IntegerField(default=0, help_text="Consecutive days of friend-verified completions.")
     last_proof_submission_date = models.DateField(null=True, blank=True)
-    
-    # AI Specific (shelved)
-    ai_streak = models.IntegerField(default=0)
-    last_ai_verification_date = models.DateField(null=True, blank=True)
-    
+
     # Challenge Linkage
     is_challenge_habit = models.BooleanField(default=False)
     challenge = models.ForeignKey('challange.Challenge', on_delete=models.SET_NULL, null=True, blank=True, related_name='linked_habits')
@@ -57,6 +53,7 @@ class Habit(models.Model):
         ('blue', 'Blue'),
     ]
     color = models.CharField(max_length=10, choices=COLOR_CHOICES, default='blue')
+    icon = models.CharField(max_length=8, blank=True, default='', help_text="Emoji shown for this habit, e.g. 💧")
     custom_frequency_days = models.IntegerField(null=True, blank=True)
 
     class Meta:
@@ -331,3 +328,43 @@ class HabitHistory(models.Model):
     class Meta:
         unique_together = ('habit', 'date')
         ordering = ['-date']
+
+
+class HabitTemplate(models.Model):
+    """A predefined habit users can add with one tap (Walk, Water, Sport, ...).
+
+    Powers the "preset library" and supplies habit-specific reminder copy
+    (e.g. "Don't forget to send your water check today 💧").
+    """
+    CATEGORY_CHOICES = [
+        ('health', 'Health'),
+        ('fitness', 'Fitness'),
+        ('mind', 'Mind'),
+        ('productivity', 'Productivity'),
+        ('lifestyle', 'Lifestyle'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    slug = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
+    icon = models.CharField(max_length=8, default='✅', help_text="Emoji, e.g. 💧")
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='lifestyle')
+    color = models.CharField(max_length=10, choices=Habit.COLOR_CHOICES, default='blue')
+
+    habit_type = models.CharField(max_length=10, choices=[('time', 'Time-based'), ('count', 'Count-based')], default='count')
+    default_target_count = models.IntegerField(null=True, blank=True, default=1)
+    default_frequency = models.CharField(max_length=10, choices=Habit.FREQUENCY_CHOICES, default='daily')
+
+    # Habit-specific reminder line used by smart notifications.
+    reminder_copy = models.CharField(max_length=200, default="Don't forget your check today!")
+    # Suggested daily reminder time (used when auto-creating a reminder).
+    reminder_time = models.TimeField(null=True, blank=True)
+
+    sort_order = models.IntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return f"{self.icon} {self.name}"

@@ -1,6 +1,6 @@
 # habits/serializers.py
 from rest_framework import serializers
-from .models import Habit
+from .models import Habit, HabitTemplate
 
 class HabitSerializer(serializers.ModelSerializer):
     streak_tier = serializers.SerializerMethodField()
@@ -14,7 +14,7 @@ class HabitSerializer(serializers.ModelSerializer):
             'total_time', 'target_time', 
             'verified_count', 'verification_streak',
             'streak_tier', 'streak_tier_name',
-            'color'
+            'color', 'icon'
         ]
         read_only_fields = [
             'streak', 'completed_count', 'last_completed_date', 
@@ -46,3 +46,13 @@ class HabitSerializer(serializers.ModelSerializer):
                 "target_time": "Target time is required for time-based habits."
             })
         return data
+
+
+class HabitTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HabitTemplate
+        fields = [
+            'id', 'slug', 'name', 'icon', 'category', 'color',
+            'habit_type', 'default_target_count', 'default_frequency',
+            'reminder_copy', 'reminder_time',
+        ]

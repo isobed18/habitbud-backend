@@ -26,7 +26,9 @@ class Notification(models.Model):
         ('INFO', 'Info'),
         ('SUCCESS', 'Success'),
         ('WARNING', 'Warning'),
-        ('AI_AGENT', 'AI Agent Alert'),
+        ('CHECK', 'Check'),          # a friend approved / sent you a check
+        ('STREAK', 'Streak'),        # streak milestone or streak-at-risk
+        ('REMINDER', 'Reminder'),    # per-habit reminder to send a check
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -46,11 +48,30 @@ class Notification(models.Model):
 class Reminder(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='reminders')
+    # Optional link to a specific habit, so reminders can be habit-aware
+    # ("Don't forget to send your water check today 💧").
+    habit = models.ForeignKey('habits.Habit', on_delete=models.CASCADE, null=True, blank=True, related_name='reminders')
     title = models.CharField(max_length=200)
     message = models.TextField()
     time = models.TimeField()
     is_active = models.BooleanField(default=True)
+    last_sent_date = models.DateField(null=True, blank=True)  # de-dupe: only fire once per day
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Reminder for {self.user.username} at {self.time}"
+
+
+class DeviceToken(models.Model):
+    """An Expo push token registered by a user's device."""
+    PLATFORM_CHOICES = [('ios', 'iOS'), ('android', 'Android'), ('web', 'Web')]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='device_tokens')
+    token = models.CharField(max_length=255, unique=True)
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES, default='android')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username} · {self.platform} · {self.token[:20]}…"

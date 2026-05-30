@@ -40,16 +40,37 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 class ConversationSerializer(serializers.ModelSerializer):
     participants = UserSerializer(many=True, read_only=True)
     last_message = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
-        fields = ['id', 'participants', 'last_message', 'created_at']
+        fields = [
+            'id', 'participants', 'last_message', 'created_at',
+            'name', 'is_group', 'avatar', 'display_name',
+        ]
 
     def get_last_message(self, obj):
         last_message = obj.messages.last()
         if last_message:
             return ChatMessageSerializer(last_message).data
         return None
+
+    def get_avatar(self, obj):
+        if obj.avatar:
+            return obj.avatar.url
+        return None
+
+    def get_display_name(self, obj):
+        """Group rooms use their name; DMs show the *other* participant."""
+        if obj.is_group:
+            return obj.name or 'Group'
+        request = self.context.get('request')
+        me = getattr(request, 'user', None)
+        others = [p for p in obj.participants.all() if p != me]
+        if others:
+            return others[0].username
+        return 'Chat'
 
 class StorySerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
