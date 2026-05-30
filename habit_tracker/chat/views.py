@@ -238,6 +238,27 @@ class ProofSubmissionView(APIView):
                 {'type': 'chat_message', 'message': clean_message_data}
             )
 
+class RecallCheckView(APIView):
+    """Undo a just-sent check: the sender deletes their own PENDING check and
+    the +5 submit XP is refunded. Used by the post-share 'Geri Al' window."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, message_id, *args, **kwargs):
+        msg = get_object_or_404(
+            ChatMessage, id=message_id, message_type=ChatMessage.MessageType.PROOF
+        )
+        if msg.sender != request.user:
+            return Response({'error': 'Not your check.'}, status=status.HTTP_403_FORBIDDEN)
+        if msg.verification_status == ChatMessage.VerificationStatus.VERIFIED:
+            return Response({'error': 'Already approved, cannot recall.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from users.gamification import GamificationEngine
+        from users.services import UserService
+        UserService.add_xp(request.user, -GamificationEngine.BASE_SUBMIT_XP)
+        msg.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class VerifyProofView(APIView):
     permission_classes = [IsAuthenticated]
 

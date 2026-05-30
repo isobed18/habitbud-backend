@@ -9,6 +9,7 @@ from .views import (
     RoomMembershipView,
     ProofSubmissionView,
     VerifyProofView,
+    RecallCheckView,
     StoryCreateView,
     StoryFeedView,
     StoryLikeView,
@@ -32,6 +33,7 @@ urlpatterns = [
     # Check submission and verification (a "check" = a habit proof snap sent to friends)
     path('checks/submit/', ProofSubmissionView.as_view(), name='check-submit'),
     path('checks/<uuid:message_id>/verify/', VerifyProofView.as_view(), name='check-verify'),
+    path('checks/<uuid:message_id>/', RecallCheckView.as_view(), name='check-recall'),
     # Backwards-compatible aliases (old "proof" naming)
     path('proof/submit/', ProofSubmissionView.as_view(), name='proof-submit'),
     path('proof/<uuid:message_id>/verify/', VerifyProofView.as_view(), name='proof-verify'),
