@@ -298,11 +298,11 @@ class VerifyProofView(APIView):
 
             # Tell the sender their check was approved, and celebrate milestones.
             from users.notifications import notify
-            habit_name = habit.name if habit else 'habit'
+            habit_name = habit.name if habit else 'alışkanlık'
             notify(
                 proof_message.sender,
-                "Check approved! 🔥",
-                f"{request.user.username} approved your {habit_name} check. +{sender_xp} XP!",
+                "Check'in onaylandı! 🔥",
+                f"{request.user.username}, {habit_name} check'ini onayladı. +{sender_xp} XP!",
                 ntype='CHECK',
                 data={'habit_id': str(habit.id) if habit else None, 'xp': sender_xp},
             )
@@ -311,8 +311,8 @@ class VerifyProofView(APIView):
                 tier, tier_name = GamificationEngine.get_streak_tier(habit_streak)
                 notify(
                     proof_message.sender,
-                    f"{habit_streak}-day streak! 🔥",
-                    f"{habit_name}: {habit_streak} days in a row. You reached the {tier_name} tier!",
+                    f"{habit_streak} günlük seri! 🔥",
+                    f"{habit_name}: üst üste {habit_streak} gün. {tier_name} seviyesine ulaştın!",
                     ntype='STREAK',
                     data={'habit_id': str(habit.id), 'streak': habit_streak, 'tier': tier},
                 )

@@ -91,14 +91,14 @@ class Command(BaseCommand):
                 continue
 
             count += 1
-            msg = (f"Your {habit.name} streak ({habit.verification_streak} days) ends at midnight. "
-                   f"Send a {habit.name} check now to keep it alive! 🔥")
+            msg = (f"{habit.name} streak'in ({habit.verification_streak} gün) gece yarısı bitiyor. "
+                   f"Hemen bir {habit.name} check'i gönder ve seriyi koru! 🔥")
             if dry_run:
                 self.stdout.write(f"  streak-risk → {habit.user.username}: {msg}")
                 continue
             notify(
                 habit.user,
-                f"🔥 {habit.name} streak at risk!",
+                f"🔥 {habit.name} streak'in tehlikede!",
                 msg,
                 ntype='STREAK',
                 data={'habit_id': str(habit.id), 'streak': habit.verification_streak},
