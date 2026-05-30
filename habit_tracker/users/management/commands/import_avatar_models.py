@@ -39,27 +39,15 @@ def _base_key(name):
 
 
 def _face_crop_bytes(path):
-    """Return a square, face-close PNG (top of the subject) for use as a snapshot.
-    Finds the subject via a corner flood-fill, then crops the top square (head)."""
+    """Simple face-close snapshot: a centered square from the top half of the
+    image (the head sits in the upper-center of these centered plush renders)."""
     import io
-    from PIL import Image, ImageDraw, ImageChops
+    from PIL import Image
     img = Image.open(path).convert('RGB')
     w, h = img.size
-    flood = img.copy()
-    for c in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
-        try:
-            ImageDraw.floodfill(flood, c, (255, 0, 255), thresh=40)
-        except Exception:
-            pass
-    sentinel = Image.new('RGB', (w, h), (255, 0, 255))
-    mask = ImageChops.difference(flood, sentinel).convert('L').point(lambda p: 255 if p > 12 else 0)
-    bbox = mask.getbbox() or (0, 0, w, h)
-    l, t, r, b = bbox
-    sw, sh = r - l, b - t
-    side = max(40, min(sw, sh))          # top square ≈ head + shoulders
-    cx = (l + r) // 2
-    left = max(0, min(cx - side // 2, w - side))
-    top = max(0, t - int(side * 0.04))   # tiny headroom
+    side = min(w, int(h * 0.55))     # ~top half height, capped to width
+    left = (w - side) // 2           # horizontally centered
+    top = int(h * 0.05)              # small headroom from the top
     crop = img.crop((left, top, left + side, top + side)).resize((256, 256), Image.LANCZOS)
     buf = io.BytesIO()
     crop.save(buf, 'PNG')
