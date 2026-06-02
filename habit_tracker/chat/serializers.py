@@ -42,12 +42,13 @@ class ConversationSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
+    created_by_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = [
             'id', 'participants', 'last_message', 'created_at',
-            'name', 'is_group', 'avatar', 'display_name',
+            'name', 'is_group', 'avatar', 'display_name', 'created_by_id',
             'live_room_type', 'required_habit_slug', 'capacity', 'privacy',
             'join_policy', 'pomodoro_work_minutes', 'pomodoro_break_minutes',
         ]
@@ -73,6 +74,9 @@ class ConversationSerializer(serializers.ModelSerializer):
         if others:
             return others[0].username
         return 'Chat'
+
+    def get_created_by_id(self, obj):
+        return str(obj.created_by_id) if obj.created_by_id else None
 
 class StorySerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
