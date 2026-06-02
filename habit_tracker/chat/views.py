@@ -442,7 +442,6 @@ class VerifyProofView(APIView):
             return Response({'error': 'Not a participant.'}, status=status.HTTP_403_FORBIDDEN)
 
         # Idempotency / anti-farm: a check can only be acted on once (PENDING).
-        # Without this, repeated 'verify' calls would award XP/diamonds each time.
         if proof_message.verification_status != ChatMessage.VerificationStatus.PENDING:
             return Response({'error': 'Bu check zaten işlendi.'}, status=status.HTTP_409_CONFLICT)
 
@@ -459,10 +458,17 @@ class VerifyProofView(APIView):
             if used >= verify_limit:
                 return Response({'error': f'Free plan daily verification limit reached ({verify_limit}).'}, status=status.HTTP_403_FORBIDDEN)
 
-        reward_info = {}
+        sender_xp = 0
+        sender_diamonds = 0
+        verifier_xp = 0
+        verifier_diamonds = 0
+
         if action == 'verify':
             habit = proof_message.related_habit
-            is_live_room = bool(proof_message.conversation and proof_message.conversation.is_live_room)
+            conversation = proof_message.conversation
+            is_live_room = bool(conversation and conversation.is_live_room)
+            is_group = bool(conversation and conversation.is_group and not is_live_room)
+            
             if habit:
                 # STRICT CHECK: Habit must be completed today to accept verification
                 if not is_live_room and not habit.is_completed_today():
@@ -470,16 +476,113 @@ class VerifyProofView(APIView):
                 if is_live_room and not habit.has_progress_today():
                     return Response({'error': 'Habit has no progress today. Cannot verify.'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Update Verification Streak & Stats (this is the ONLY place it should be called)
+                # Update Verification Streak & Stats
                 if habit.is_completed_today():
                     habit.update_verification_streak()
                 
             proof_message.verification_status = ChatMessage.VerificationStatus.VERIFIED
+            proof_message.save()
             
-            # Get friendship for streak multiplier
             from users.gamification import GamificationEngine
             from users.services import UserService
+            from habits.models import HabitConnection, HabitGroup, HabitGroupMember
+            from users.notifications import notify
+            import datetime
+            today_date = datetime.date.today()
+            yesterday_date = today_date - datetime.timedelta(days=1)
+
+            # Resolve if it is a Duo Connection or Group Habit
+            duo_conn = None
+            group_habit = None
             
+            if is_group:
+                # Group Flow
+                group_habit = getattr(conversation, 'habit_group', None)
+                if group_habit:
+                    group_habit.check_and_reset_progress()
+                    member = HabitGroupMember.objects.filter(group=group_habit, user=proof_message.sender).first()
+                    if member:
+                        member.verified_today = True
+                        member.last_verified_date = today_date
+                        member.save()
+
+                    # Check if all members are verified today
+                    all_members = group_habit.memberships.all()
+                    if all(m.verified_today for m in all_members):
+                        # Group Completed today!
+                        if group_habit.last_completed_date != today_date:
+                            if group_habit.last_completed_date == yesterday_date:
+                                group_habit.streak += 1
+                            else:
+                                group_habit.streak = 1
+                            group_habit.best_streak = max(group_habit.best_streak, group_habit.streak)
+                            group_habit.last_completed_date = today_date
+                            group_habit.save()
+
+                            # Group Complete Bonus to all members
+                            for m in all_members:
+                                UserService.add_xp(m.user, 50)
+                                UserService.add_points(m.user, 10)
+                                notify(
+                                    m.user,
+                                    f"Grup Alışkanlığı Tamamlandı! 🔥 (Seri: {group_habit.streak})",
+                                    f"'{group_habit.name}' grubundaki herkes hedefini tamamladı! +50 XP ve +10 💎 kazandınız!",
+                                    ntype='SUCCESS'
+                                )
+                                # WebSocket broadcast for group completion
+                                try:
+                                    channel_layer = get_channel_layer()
+                                    if channel_layer:
+                                        async_to_sync(channel_layer.group_send)(
+                                            f"user_{m.user.id}",
+                                            {
+                                                'type': 'system_notification',
+                                                'notification_type': 'group_completed',
+                                                'data': {'group_id': str(group_habit.id), 'streak': group_habit.streak}
+                                            }
+                                        )
+                                except Exception:
+                                    pass
+            else:
+                # Duo Flow
+                friend = conversation.participants.exclude(id=proof_message.sender.id).first()
+                if friend:
+                    duo_conn = HabitConnection.objects.filter(
+                        (Q(user1=proof_message.sender, user2=friend) & Q(habit1=habit)) |
+                        (Q(user1=friend, user2=proof_message.sender) & Q(habit2=habit)),
+                        status='accepted'
+                    ).first()
+                    if duo_conn:
+                        duo_conn.check_and_reset_progress()
+                        if duo_conn.user1 == proof_message.sender:
+                            duo_conn.user1_verified_today = True
+                        else:
+                            duo_conn.user2_verified_today = True
+                        duo_conn.save()
+
+                        # Check if both are verified
+                        if duo_conn.user1_verified_today and duo_conn.user2_verified_today:
+                            if duo_conn.last_completed_date != today_date:
+                                if duo_conn.last_completed_date == yesterday_date:
+                                    duo_conn.streak += 1
+                                else:
+                                    duo_conn.streak = 1
+                                duo_conn.best_streak = max(duo_conn.best_streak, duo_conn.streak)
+                                duo_conn.last_completed_date = today_date
+                                duo_conn.save()
+
+                                # Duo Complete Bonus to both
+                                for u in [duo_conn.user1, duo_conn.user2]:
+                                    UserService.add_xp(u, 15)
+                                    UserService.add_points(u, 3)
+                                    notify(
+                                        u,
+                                        f"Ortak Seri Tamamlandı! 🥂 (Seri: {duo_conn.streak})",
+                                        f"'{duo_conn.habit_name}' alışkanlığını bugün ikiniz de tamamladınız! +15 XP ve +3 💎 kazandınız!",
+                                        ntype='SUCCESS'
+                                    )
+            
+            # Get friendship for streak multiplier
             friend_streak = 0
             try:
                 friendship = Friendship.objects.filter(
@@ -493,86 +596,106 @@ class VerifyProofView(APIView):
             except Exception as e:
                 logging.getLogger(__name__).error(f"Error updating friendship streak: {e}")
 
-            # SENDER: base_verify × habit_streak_mult × friend_streak_mult
-            base_verify_xp = 4 if is_live_room else GamificationEngine.BASE_VERIFY_XP
-            base_verifier_xp = 1 if is_live_room else GamificationEngine.BASE_VERIFIER_XP
-            habit_streak = habit.verification_streak if habit else 0
-            sender_xp, h_mult, f_mult = GamificationEngine.calculate_full_reward(
-                base_verify_xp, habit_streak, friend_streak
-            )
-            UserService.add_xp(proof_message.sender, sender_xp)
-            
-            # Award points (diamonds) decoupled from XP
-            UserService.add_points(proof_message.sender, 1)
-            UserService.add_points(request.user, 1)
+            # Calculate base rewards depending on Duo or Group
+            if group_habit:
+                # Group reward (Higher)
+                base_verify_xp = 30
+                base_verifier_xp = 20
+                sender_diamonds = 3
+                verifier_diamonds = 2
+            elif duo_conn:
+                # Duo reward (Medium)
+                base_verify_xp = 15
+                base_verifier_xp = 10
+                sender_diamonds = 2
+                verifier_diamonds = 1
+            else:
+                # Solo fallback reward (Legacy)
+                base_verify_xp = 4 if is_live_room else GamificationEngine.BASE_VERIFY_XP
+                base_verifier_xp = 1 if is_live_room else GamificationEngine.BASE_VERIFIER_XP
+                sender_diamonds = 1
+                verifier_diamonds = 1
 
-            # VERIFIER: base_verifier × friend_streak_mult
+            # Adjust habit streak depending on context
+            if group_habit:
+                habit_streak = group_habit.streak
+                h_mult = GamificationEngine.calculate_habit_streak_multiplier(habit_streak) + 0.5
+                f_mult = GamificationEngine.calculate_friend_streak_multiplier(friend_streak)
+                sender_xp = int(round(base_verify_xp * h_mult * f_mult))
+            elif duo_conn:
+                habit_streak = duo_conn.streak
+                sender_xp, h_mult, f_mult = GamificationEngine.calculate_full_reward(
+                    base_verify_xp, habit_streak, friend_streak
+                )
+            else:
+                habit_streak = habit.verification_streak if habit else 0
+                sender_xp, h_mult, f_mult = GamificationEngine.calculate_full_reward(
+                    base_verify_xp, habit_streak, friend_streak
+                )
+
+            # Add sender rewards
+            UserService.add_xp(proof_message.sender, sender_xp)
+            UserService.add_points(proof_message.sender, sender_diamonds)
+            
+            # Add verifier rewards
             verifier_xp = int(round(base_verifier_xp *
                             GamificationEngine.calculate_friend_streak_multiplier(friend_streak)))
             UserService.add_xp(request.user, verifier_xp)
+            UserService.add_points(request.user, verifier_diamonds)
 
-            is_milestone = bool(habit and GamificationEngine.is_milestone(habit_streak))
-            milestone_bonus = 0
-            if is_milestone:
-                milestone_bonus = habit_streak * 2
-                UserService.add_points(proof_message.sender, milestone_bonus)
-
-            # Tell the sender their check was approved, and celebrate milestones.
+            # Notify sender
             from users.notifications import notify
             habit_name = habit.name if habit else 'alışkanlık'
             notify(
                 proof_message.sender,
                 "Check'in onaylandı! 🔥",
-                f"{request.user.username}, {habit_name} check'ini onayladı. +{sender_xp} XP ve +1 💎 kazandın!",
+                f"{request.user.username}, {habit_name} check'ini onayladı. +{sender_xp} XP ve +{sender_diamonds} 💎 kazandın!",
                 ntype='CHECK',
-                data={'habit_id': str(habit.id) if habit else None, 'xp': sender_xp, 'points': 1},
+                data={'habit_id': str(habit.id) if habit else None, 'xp': sender_xp, 'points': sender_diamonds},
             )
-            if is_milestone:
-                tier, tier_name = GamificationEngine.get_streak_tier(habit_streak)
-                notify(
-                    proof_message.sender,
-                    f"{habit_streak} günlük seri! 🔥",
-                    f"{habit_name}: üst üste {habit_streak} gün. {tier_name} seviyesine ulaştın! Ekstra +{milestone_bonus} 💎 kazandın!",
-                    ntype='STREAK',
-                    data={'habit_id': str(habit.id), 'streak': habit_streak, 'tier': tier, 'points_bonus': milestone_bonus},
+
+            # Broadcast verify state update to conversation room via WebSockets
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                room_group_name = f'chat_{proof_message.conversation.id}'
+                message_data = ChatMessageSerializer(proof_message).data
+                clean_message_data = json.loads(json.dumps(message_data, default=str))
+                async_to_sync(channel_layer.group_send)(
+                    room_group_name,
+                    {'type': 'chat_message', 'message': clean_message_data}
                 )
 
-            reward_info = {
-                'sender_xp': sender_xp,
-                'verifier_xp': verifier_xp,
-                'sender_diamonds': 1 + milestone_bonus,
-                'verifier_diamonds': 1,
-                'habit_multiplier': h_mult,
-                'friend_multiplier': f_mult,
-                'habit_streak': habit_streak,
-                'friend_streak': friend_streak,
-                'milestone': is_milestone,
-                'milestone_bonus': milestone_bonus,
-            }
-
-        else:
+        elif action == 'reject':
             proof_message.verification_status = ChatMessage.VerificationStatus.REJECTED
+            proof_message.save()
 
-        proof_message.save(update_fields=['verification_status'])
-        self.broadcast_verification(proof_message)
-
-        return Response(
-            {**ChatMessageSerializer(proof_message).data, **reward_info},
-            status=status.HTTP_200_OK,
-        )
-
-    def broadcast_verification(self, message):
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            room_group_name = f'chat_{message.conversation.id}'
-            message_data = ChatMessageSerializer(message).data
-            # UUID FIX:
-            clean_message_data = json.loads(json.dumps(message_data, default=str))
-            
-            async_to_sync(channel_layer.group_send)(
-                room_group_name,
-                {'type': 'chat_message', 'message': clean_message_data}
+            # Notify sender
+            from users.notifications import notify
+            notify(
+                proof_message.sender,
+                "Kanıt Reddedildi ❌",
+                f"{request.user.username} '{proof_message.related_habit.name}' kanıtını reddetti. Yeni bir kanıt yüklemeyi dene.",
+                ntype='ERROR'
             )
+
+            # Broadcast reject state update to conversation room via WebSockets
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                room_group_name = f'chat_{proof_message.conversation.id}'
+                message_data = ChatMessageSerializer(proof_message).data
+                clean_message_data = json.loads(json.dumps(message_data, default=str))
+                async_to_sync(channel_layer.group_send)(
+                    room_group_name,
+                    {'type': 'chat_message', 'message': clean_message_data}
+                )
+
+        return Response({
+            'status': proof_message.verification_status,
+            'sender_xp_earned': sender_xp,
+            'sender_diamonds_earned': sender_diamonds,
+            'verifier_xp_earned': verifier_xp,
+            'verifier_diamonds_earned': verifier_diamonds,
+        }, status=status.HTTP_200_OK)
 
 from .models import Story
 from .serializers import StorySerializer

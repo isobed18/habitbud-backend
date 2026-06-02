@@ -265,3 +265,272 @@ class HabitTemplateListView(generics.ListAPIView):
         return qs
 
 
+from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.db.models import Q, Count
+from friends.models import Friendship
+from chat.models import Conversation
+from .models import HabitConnection, HabitGroup, HabitGroupMember
+from .serializers import HabitConnectionSerializer, HabitGroupSerializer
+
+User = get_user_model()
+
+class HabitConnectionCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        habit_id = request.data.get('habit_id')
+        friend_id = request.data.get('friend_id')
+
+        if not habit_id or not friend_id:
+            return Response({'error': 'habit_id and friend_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+        friend = get_object_or_404(User, id=friend_id)
+
+        # 1. Friendship check
+        is_friend = Friendship.objects.filter(
+            (Q(from_user=request.user, to_user=friend) | Q(from_user=friend, to_user=request.user)),
+            status=Friendship.Status.ACCEPTED
+        ).exists()
+        if not is_friend:
+            return Response({'error': 'Davet göndermek istediğiniz kişiyle arkadaş değilsiniz.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # 2. Duplicate connection check
+        existing = HabitConnection.objects.filter(
+            (Q(user1=request.user, user2=friend) | Q(user1=friend, user2=request.user)),
+            habit_name__iexact=habit.name
+        ).exclude(status='declined').first()
+
+        if existing:
+            return Response({'error': 'Bu arkadaşınızla bu alışkanlık için zaten bekleyen veya aktif bir bağlantınız var.'}, status=status.HTTP_409_CONFLICT)
+
+        # Check if they share a group for this habit name
+        group_exists = HabitGroup.objects.filter(
+            memberships__user=request.user,
+            name__iexact=habit.name
+        ).filter(
+            memberships__user=friend
+        ).exists()
+
+        if group_exists:
+            return Response({'error': f"Bu arkadaşınızla zaten ortak bir '{habit.name}' grubundasınız. Mükerrer bağlara izin verilmez."}, status=status.HTTP_409_CONFLICT)
+
+        # 3. Resolve Friend's Habit
+        friend_habit = Habit.objects.filter(user=friend, name__iexact=habit.name).first()
+
+        connection = HabitConnection.objects.create(
+            user1=request.user,
+            user2=friend,
+            habit1=habit,
+            habit2=friend_habit,
+            habit_name=habit.name,
+            status='pending'
+        )
+
+        # Send push/in-app notification to the friend
+        from users.notifications import notify
+        notify(
+            friend,
+            "Alışkanlık Bağlantı Daveti! 🌱",
+            f"{request.user.username} seninle '{habit.name}' alışkanlığını ortak takip etmek istiyor.",
+            ntype='INFO'
+        )
+
+        return Response(HabitConnectionSerializer(connection, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+
+class HabitConnectionRespondView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, connection_id):
+        action = request.data.get('action')
+        if action not in ['accept', 'decline']:
+            return Response({'error': 'Invalid action. Choose accept or decline.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        connection = get_object_or_404(HabitConnection, id=connection_id, user2=request.user, status='pending')
+
+        if action == 'accept':
+            # Create/resolve habit for user2
+            if not connection.habit2:
+                # Check if user already has a habit with the same name (case-insensitive)
+                existing_habit = Habit.objects.filter(user=request.user, name__iexact=connection.habit_name).first()
+                if existing_habit:
+                    connection.habit2 = existing_habit
+                else:
+                    h1 = connection.habit1
+                    connection.habit2 = Habit.objects.create(
+                        user=request.user,
+                        name=connection.habit_name,
+                        habit_type=h1.habit_type,
+                        target_count=h1.target_count,
+                        target_time=h1.target_time,
+                        frequency=h1.frequency,
+                        color=h1.color,
+                        icon=h1.icon,
+                        schedule_type=h1.schedule_type,
+                        schedule_weekdays=h1.schedule_weekdays,
+                        schedule_target_count=h1.schedule_target_count
+                    )
+            
+            connection.status = 'accepted'
+            connection.save()
+
+            # Ensure a 1:1 conversation exists
+            conversation = Conversation.objects.annotate(p_count=Count('participants')).filter(
+                participants=request.user
+            ).filter(
+                participants=connection.user1
+            ).filter(
+                p_count=2
+            ).first()
+
+            if not conversation:
+                conversation = Conversation.objects.create()
+                conversation.participants.add(request.user, connection.user1)
+
+            # Notify user1
+            from users.notifications import notify
+            notify(
+                connection.user1,
+                "Bağlantı Daveti Kabul Edildi! 🎉",
+                f"{request.user.username} ile '{connection.habit_name}' ortak takibi başladı. Seriyi başlatmak için check atın!",
+                ntype='SUCCESS'
+            )
+
+        else:
+            connection.status = 'declined'
+            connection.save()
+
+        return Response(HabitConnectionSerializer(connection, context={'request': request}).data, status=status.HTTP_200_OK)
+
+
+class HabitConnectionListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        connections = HabitConnection.objects.filter(
+            Q(user1=request.user) | Q(user2=request.user)
+        ).exclude(status='declined')
+
+        for conn in connections:
+            conn.check_and_reset_progress()
+
+        return Response(HabitConnectionSerializer(connections, many=True, context={'request': request}).data)
+
+
+class HabitGroupCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        name = request.data.get('name')
+        habit_id = request.data.get('habit_id')
+        participant_ids = request.data.get('participant_ids', [])
+
+        if not name or not habit_id or not participant_ids:
+            return Response({'error': 'name, habit_id, and participant_ids are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        habit = get_object_or_404(Habit, id=habit_id, user=request.user)
+        participants = User.objects.filter(id__in=participant_ids)
+
+        all_users = list(participants) + [request.user]
+
+        # 1. Enforce unique connection rules to prevent farming
+        # Verify that no two users in the group already share a connection/group for this habit name
+        for i in range(len(all_users)):
+            for j in range(i + 1, len(all_users)):
+                u1 = all_users[i]
+                u2 = all_users[j]
+                
+                # Check direct HabitConnection
+                conn_exists = HabitConnection.objects.filter(
+                    (Q(user1=u1, user2=u2) | Q(user1=u2, user2=u1)),
+                    habit_name__iexact=habit.name
+                ).exclude(status='declined').exists()
+                
+                if conn_exists:
+                    return Response({'error': f"Grup üyelerinden '{u1.username}' ve '{u2.username}' zaten '{habit.name}' alışkanlığı için bağlılar. Mükerrer bağlara izin verilmez."}, status=status.HTTP_409_CONFLICT)
+
+                # Check shared HabitGroup
+                group_exists = HabitGroup.objects.filter(
+                    memberships__user=u1,
+                    name__iexact=habit.name
+                ).filter(
+                    memberships__user=u2
+                ).exists()
+
+                if group_exists:
+                    return Response({'error': f"Grup üyelerinden '{u1.username}' ve '{u2.username}' zaten ortak bir '{habit.name}' grubundalar."}, status=status.HTTP_409_CONFLICT)
+
+        # 2. Create Chat Conversation Room
+        conversation = Conversation.objects.create(
+            name=name,
+            is_group=True,
+            created_by=request.user
+        )
+        conversation.participants.add(*all_users)
+
+        # 3. Create HabitGroup
+        group = HabitGroup.objects.create(
+            name=habit.name,
+            creator=request.user,
+            conversation=conversation
+        )
+
+        # 4. Add Creator Membership
+        HabitGroupMember.objects.create(
+            group=group,
+            user=request.user,
+            habit=habit
+        )
+
+        # 5. Add Participant Memberships
+        for p in participants:
+            # Find matching habit or auto-create one
+            p_habit = Habit.objects.filter(user=p, name__iexact=habit.name).first()
+            if not p_habit:
+                p_habit = Habit.objects.create(
+                    user=p,
+                    name=habit.name,
+                    habit_type=habit.habit_type,
+                    target_count=habit.target_count,
+                    target_time=habit.target_time,
+                    frequency=habit.frequency,
+                    color=habit.color,
+                    icon=habit.icon,
+                    schedule_type=habit.schedule_type,
+                    schedule_weekdays=habit.schedule_weekdays,
+                    schedule_target_count=habit.schedule_target_count
+                )
+            
+            HabitGroupMember.objects.create(
+                group=group,
+                user=p,
+                habit=p_habit
+            )
+
+            # Notify participant
+            from users.notifications import notify
+            notify(
+                p,
+                f"Yeni Alışkanlık Grubu: {name}! 👥",
+                f"{request.user.username} seni '{habit.name}' ortak alışkanlık grubuna ekledi.",
+                ntype='INFO'
+            )
+
+        return Response(HabitGroupSerializer(group, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+
+class HabitGroupListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        groups = HabitGroup.objects.filter(memberships__user=request.user).distinct()
+
+        for group in groups:
+            group.check_and_reset_progress()
+
+        return Response(HabitGroupSerializer(groups, many=True, context={'request': request}).data)

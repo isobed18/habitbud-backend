@@ -498,3 +498,86 @@ class HabitTemplate(models.Model):
 
     def __str__(self):
         return f"{self.icon} {self.name}"
+
+
+class HabitConnection(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user1 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='connections_as_user1')
+    user2 = models.ForeignKey(User, on_delete=models.CASCADE, related_name='connections_as_user2')
+    habit1 = models.ForeignKey(Habit, on_delete=models.CASCADE, related_name='connections_as_habit1')
+    habit2 = models.ForeignKey(Habit, on_delete=models.CASCADE, related_name='connections_as_habit2', null=True, blank=True)
+    habit_name = models.CharField(max_length=100)
+    status = models.CharField(max_length=10, choices=[('pending', 'Pending'), ('accepted', 'Accepted'), ('declined', 'Declined')], default='pending')
+    
+    streak = models.IntegerField(default=0)
+    best_streak = models.IntegerField(default=0)
+    last_completed_date = models.DateField(null=True, blank=True)
+    last_reset_date = models.DateField(default=timezone.now)
+    
+    user1_verified_today = models.BooleanField(default=False)
+    user2_verified_today = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('habit1', 'user2')
+
+    def check_and_reset_progress(self):
+        import pytz
+        try:
+            user_tz = pytz.timezone(self.user1.timezone)
+            today = timezone.now().astimezone(user_tz).date()
+        except Exception:
+            today = timezone.now().date()
+            
+        if today > self.last_reset_date:
+            self.user1_verified_today = False
+            self.user2_verified_today = False
+            self.last_reset_date = today
+            self.save(update_fields=['user1_verified_today', 'user2_verified_today', 'last_reset_date'])
+
+    def __str__(self):
+        return f"{self.habit_name} Connection: {self.user1.username} <-> {self.user2.username}"
+
+
+class HabitGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100)
+    creator = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_habit_groups')
+    conversation = models.OneToOneField('chat.Conversation', on_delete=models.CASCADE, related_name='habit_group', null=True, blank=True)
+    
+    streak = models.IntegerField(default=0)
+    best_streak = models.IntegerField(default=0)
+    last_completed_date = models.DateField(null=True, blank=True)
+    last_reset_date = models.DateField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def check_and_reset_progress(self):
+        import pytz
+        try:
+            user_tz = pytz.timezone(self.creator.timezone)
+            today = timezone.now().astimezone(user_tz).date()
+        except Exception:
+            today = timezone.now().date()
+            
+        if today > self.last_reset_date:
+            self.memberships.all().update(verified_today=False)
+            self.last_reset_date = today
+            self.save(update_fields=['last_reset_date'])
+
+    def __str__(self):
+        return f"Group Habit: {self.name}"
+
+
+class HabitGroupMember(models.Model):
+    group = models.ForeignKey(HabitGroup, on_delete=models.CASCADE, related_name='memberships')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='group_memberships')
+    habit = models.ForeignKey(Habit, on_delete=models.CASCADE, related_name='group_memberships')
+    verified_today = models.BooleanField(default=False)
+    last_verified_date = models.DateField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('group', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} in {self.group.name}"
+

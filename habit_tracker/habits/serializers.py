@@ -1,6 +1,6 @@
 # habits/serializers.py
 from rest_framework import serializers
-from .models import Habit, HabitTemplate
+from .models import Habit, HabitTemplate, HabitConnection, HabitGroup, HabitGroupMember
 
 class HabitSerializer(serializers.ModelSerializer):
     streak_tier = serializers.SerializerMethodField()
@@ -85,3 +85,58 @@ class HabitTemplateSerializer(serializers.ModelSerializer):
             'habit_type', 'default_target_count', 'default_frequency',
             'reminder_copy', 'reminder_time',
         ]
+
+
+from django.contrib.auth import get_user_model
+User = get_user_model()
+
+class UserMiniSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'avatar_url']
+
+    def get_avatar_url(self, obj):
+        if obj.avatar:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.avatar.url)
+            return obj.avatar.url
+        return None
+
+class HabitConnectionSerializer(serializers.ModelSerializer):
+    user1 = UserMiniSerializer(read_only=True)
+    user2 = UserMiniSerializer(read_only=True)
+    habit1_id = serializers.PrimaryKeyRelatedField(source='habit1', read_only=True)
+    habit2_id = serializers.PrimaryKeyRelatedField(source='habit2', read_only=True)
+
+    class Meta:
+        model = HabitConnection
+        fields = [
+            'id', 'user1', 'user2', 'habit1_id', 'habit2_id', 'habit_name',
+            'status', 'streak', 'best_streak', 'last_completed_date',
+            'user1_verified_today', 'user2_verified_today', 'created_at'
+        ]
+        read_only_fields = fields
+
+class HabitGroupMemberSerializer(serializers.ModelSerializer):
+    user = UserMiniSerializer(read_only=True)
+    habit = HabitSerializer(read_only=True)
+
+    class Meta:
+        model = HabitGroupMember
+        fields = ['id', 'user', 'habit', 'verified_today', 'last_verified_date']
+
+class HabitGroupSerializer(serializers.ModelSerializer):
+    creator = UserMiniSerializer(read_only=True)
+    memberships = HabitGroupMemberSerializer(many=True, read_only=True)
+    conversation_id = serializers.PrimaryKeyRelatedField(source='conversation', read_only=True)
+
+    class Meta:
+        model = HabitGroup
+        fields = [
+            'id', 'name', 'creator', 'streak', 'best_streak',
+            'last_completed_date', 'memberships', 'created_at', 'conversation_id'
+        ]
+        read_only_fields = fields
