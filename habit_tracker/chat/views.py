@@ -99,7 +99,43 @@ class CreateRoomView(APIView):
         if not name:
             return Response({'error': 'name is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        room = Conversation.objects.create(name=name, is_group=True, created_by=request.user)
+        live_room_type = request.data.get('live_room_type') or Conversation.LiveRoomType.GENERAL
+        if live_room_type not in Conversation.LiveRoomType.values:
+            return Response({'error': 'Invalid live_room_type.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        privacy = request.data.get('privacy') or Conversation.RoomPrivacy.FRIENDS
+        if privacy not in Conversation.RoomPrivacy.values:
+            return Response({'error': 'Invalid privacy.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        join_policy = request.data.get('join_policy') or Conversation.JoinPolicy.OPEN
+        if join_policy not in Conversation.JoinPolicy.values:
+            return Response({'error': 'Invalid join_policy.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            capacity = max(2, min(int(request.data.get('capacity') or 8), 50))
+            work_minutes = max(1, min(int(request.data.get('pomodoro_work_minutes') or 25), 180))
+            break_minutes = max(1, min(int(request.data.get('pomodoro_break_minutes') or 5), 60))
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid room timer settings.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        required_habit_slug = request.data.get('required_habit_slug') or ''
+        if live_room_type == Conversation.LiveRoomType.STUDY:
+            required_habit_slug = required_habit_slug or 'study'
+        elif live_room_type == Conversation.LiveRoomType.WORKOUT:
+            required_habit_slug = required_habit_slug or 'workout'
+
+        room = Conversation.objects.create(
+            name=name,
+            is_group=True,
+            created_by=request.user,
+            live_room_type=live_room_type,
+            required_habit_slug=required_habit_slug,
+            capacity=capacity,
+            privacy=privacy,
+            join_policy=join_policy,
+            pomodoro_work_minutes=work_minutes,
+            pomodoro_break_minutes=break_minutes,
+        )
         room.participants.add(request.user)
 
         for uid in participant_ids:
@@ -112,6 +148,8 @@ class CreateRoomView(APIView):
                 status=Friendship.Status.ACCEPTED
             ).exists()
             if is_friend:
+                if room.participants.count() >= room.capacity:
+                    break
                 room.participants.add(friend)
 
         serializer = ConversationSerializer(room, context={'request': request})
@@ -124,6 +162,10 @@ class RoomMembershipView(APIView):
 
     def post(self, request, conversation_id, *args, **kwargs):
         room = get_object_or_404(Conversation, id=conversation_id, is_group=True)
+        if room.participants.count() >= room.capacity:
+            return Response({'error': 'Room is full.'}, status=status.HTTP_400_BAD_REQUEST)
+        if room.join_policy == Conversation.JoinPolicy.REQUEST and room.created_by != request.user:
+            return Response({'error': 'Join request flow is not enabled yet for this room.'}, status=status.HTTP_403_FORBIDDEN)
         room.participants.add(request.user)
         return Response(ConversationSerializer(room, context={'request': request}).data)
 
@@ -193,7 +235,18 @@ class ProofSubmissionView(APIView):
         habit = get_object_or_404(Habit, id=habit_id, user=request.user)
         
         # Habit must be completed today before sending proof
-        if not habit.is_completed_today():
+        is_live_room = False
+        if conversation_id:
+            try:
+                candidate = Conversation.objects.get(id=conversation_id)
+                is_live_room = candidate.is_live_room
+            except Conversation.DoesNotExist:
+                is_live_room = False
+
+        if is_live_room:
+            if not habit.has_progress_today():
+                return Response({'error': 'Start this habit before submitting a live-room check.'}, status=status.HTTP_400_BAD_REQUEST)
+        elif not habit.is_completed_today():
             return Response({'error': 'Habit must be completed before submitting proof.'}, status=status.HTTP_400_BAD_REQUEST)
 
         
@@ -309,13 +362,17 @@ class VerifyProofView(APIView):
         reward_info = {}
         if action == 'verify':
             habit = proof_message.related_habit
+            is_live_room = bool(proof_message.conversation and proof_message.conversation.is_live_room)
             if habit:
                 # STRICT CHECK: Habit must be completed today to accept verification
-                if not habit.is_completed_today():
+                if not is_live_room and not habit.is_completed_today():
                     return Response({'error': 'Habit is not completed today. Cannot verify.'}, status=status.HTTP_400_BAD_REQUEST)
+                if is_live_room and not habit.has_progress_today():
+                    return Response({'error': 'Habit has no progress today. Cannot verify.'}, status=status.HTTP_400_BAD_REQUEST)
                 
                 # Update Verification Streak & Stats (this is the ONLY place it should be called)
-                habit.update_verification_streak()
+                if habit.is_completed_today():
+                    habit.update_verification_streak()
                 
             proof_message.verification_status = ChatMessage.VerificationStatus.VERIFIED
             
@@ -337,9 +394,11 @@ class VerifyProofView(APIView):
                 logging.getLogger(__name__).error(f"Error updating friendship streak: {e}")
 
             # SENDER: base_verify × habit_streak_mult × friend_streak_mult
+            base_verify_xp = 4 if is_live_room else GamificationEngine.BASE_VERIFY_XP
+            base_verifier_xp = 1 if is_live_room else GamificationEngine.BASE_VERIFIER_XP
             habit_streak = habit.verification_streak if habit else 0
             sender_xp, h_mult, f_mult = GamificationEngine.calculate_full_reward(
-                GamificationEngine.BASE_VERIFY_XP, habit_streak, friend_streak
+                base_verify_xp, habit_streak, friend_streak
             )
             UserService.add_xp(proof_message.sender, sender_xp)
             
@@ -348,7 +407,7 @@ class VerifyProofView(APIView):
             UserService.add_points(request.user, 1)
 
             # VERIFIER: base_verifier × friend_streak_mult
-            verifier_xp = int(round(GamificationEngine.BASE_VERIFIER_XP *
+            verifier_xp = int(round(base_verifier_xp *
                             GamificationEngine.calculate_friend_streak_multiplier(friend_streak)))
             UserService.add_xp(request.user, verifier_xp)
 

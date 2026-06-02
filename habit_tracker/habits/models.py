@@ -68,6 +68,16 @@ class Habit(models.Model):
         """Check if today's target has been reached."""
         if self.habit_type == 'count' and self.target_count is not None:
             return self.count >= self.target_count
+        if self.habit_type == 'time' and self.target_time is not None:
+            return (self.total_time or timedelta(0)) >= self.target_time
+        return False
+
+    def has_progress_today(self):
+        """Check whether there is any progress today, even if target is unfinished."""
+        if self.habit_type == 'count':
+            return self.count > 0
+        if self.habit_type == 'time':
+            return bool(self.total_time and self.total_time > timedelta(0))
         return False
 
     @property

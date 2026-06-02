@@ -45,6 +45,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         created, updated = 0, 0
         for order, (slug, name, icon, category, color, target, freq, copy, hour) in enumerate(TEMPLATES):
+            is_time_preset = slug in {"study", "workout"}
+            preset_type = "time" if is_time_preset else "count"
+            preset_target = 1500 if slug == "study" else (1800 if slug == "workout" else target)
             obj, was_created = HabitTemplate.objects.update_or_create(
                 slug=slug,
                 defaults={
@@ -52,8 +55,8 @@ class Command(BaseCommand):
                     "icon": icon,
                     "category": category,
                     "color": color,
-                    "habit_type": "count",
-                    "default_target_count": target,
+                    "habit_type": preset_type,
+                    "default_target_count": preset_target,
                     "default_frequency": freq,
                     "reminder_copy": copy,
                     "reminder_time": time(hour, 0),

@@ -7,6 +7,21 @@ import uuid
 
 class Conversation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    class LiveRoomType(models.TextChoices):
+        GENERAL = 'general', 'General'
+        STUDY = 'study', 'Study'
+        WORKOUT = 'workout', 'Workout'
+
+    class RoomPrivacy(models.TextChoices):
+        FRIENDS = 'friends', 'Friends'
+        PRIVATE = 'private', 'Private'
+        PUBLIC = 'public', 'Public'
+
+    class JoinPolicy(models.TextChoices):
+        OPEN = 'open', 'Open'
+        REQUEST = 'request', 'Request'
+
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="conversations")
     # Group chat room support. 1:1 DMs leave these defaults.
     name = models.CharField(max_length=100, blank=True, default='')
@@ -18,10 +33,23 @@ class Conversation(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Live habit room metadata. DMs and ordinary group rooms keep the defaults.
+    live_room_type = models.CharField(max_length=20, choices=LiveRoomType.choices, default=LiveRoomType.GENERAL)
+    required_habit_slug = models.SlugField(max_length=50, blank=True, default='')
+    capacity = models.PositiveSmallIntegerField(default=8)
+    privacy = models.CharField(max_length=10, choices=RoomPrivacy.choices, default=RoomPrivacy.FRIENDS)
+    join_policy = models.CharField(max_length=10, choices=JoinPolicy.choices, default=JoinPolicy.OPEN)
+    pomodoro_work_minutes = models.PositiveSmallIntegerField(default=25)
+    pomodoro_break_minutes = models.PositiveSmallIntegerField(default=5)
+
     def __str__(self):
         if self.is_group:
             return f"Room: {self.name or self.id}"
         return f"Conversation {self.id}"
+
+    @property
+    def is_live_room(self):
+        return self.is_group and self.live_room_type != self.LiveRoomType.GENERAL
 
 class ChatMessage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

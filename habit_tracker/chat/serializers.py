@@ -48,6 +48,8 @@ class ConversationSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'participants', 'last_message', 'created_at',
             'name', 'is_group', 'avatar', 'display_name',
+            'live_room_type', 'required_habit_slug', 'capacity', 'privacy',
+            'join_policy', 'pomodoro_work_minutes', 'pomodoro_break_minutes',
         ]
 
     def get_last_message(self, obj):
