@@ -624,6 +624,21 @@ class StreakRecoveryView(APIView):
 class GroupReserveView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, conversation_id):
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        if request.user not in conversation.participants.all():
+            return Response({'error': 'Katılımcı değilsiniz.'}, status=status.HTTP_403_FORBIDDEN)
+
+        reserves = GroupReserve.objects.filter(conversation=conversation, used=False)
+        data = [{
+            'id': r.id,
+            'username': r.user.username,
+            'user_id': r.user.id,
+            'can_withdraw': r.can_withdraw and (r.user == request.user),
+            'created_at': r.created_at
+        } for r in reserves]
+        return Response(data)
+
     @transaction.atomic
     def post(self, request, conversation_id):
         conversation = get_object_or_404(Conversation, id=conversation_id)
