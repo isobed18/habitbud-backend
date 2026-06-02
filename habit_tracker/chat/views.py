@@ -11,6 +11,7 @@ from .models import Conversation, ChatMessage
 from .serializers import ConversationSerializer, ChatMessageSerializer
 from friends.models import Friendship
 from django.db.models import Q, Count
+from django.db import transaction
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
@@ -173,6 +174,7 @@ class MessageCreateView(generics.CreateAPIView):
 class ProofSubmissionView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
         """
         Social Proof Submission: Sends a proof image to a friend/conversation.
@@ -264,6 +266,7 @@ class RecallCheckView(APIView):
     the +5 submit XP is refunded. Used by the post-share 'Geri Al' window."""
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def delete(self, request, message_id, *args, **kwargs):
         msg = get_object_or_404(
             ChatMessage, id=message_id, message_type=ChatMessage.MessageType.PROOF
@@ -283,6 +286,7 @@ class RecallCheckView(APIView):
 class VerifyProofView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request, message_id, *args, **kwargs):
         action = request.data.get('action')
         if action not in ['verify', 'reject']:
@@ -295,6 +299,11 @@ class VerifyProofView(APIView):
         
         if request.user not in proof_message.conversation.participants.all():
             return Response({'error': 'Not a participant.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Idempotency / anti-farm: a check can only be acted on once (PENDING).
+        # Without this, repeated 'verify' calls would award XP/diamonds each time.
+        if proof_message.verification_status != ChatMessage.VerificationStatus.PENDING:
+            return Response({'error': 'Bu check zaten işlendi.'}, status=status.HTTP_409_CONFLICT)
 
         reward_info = {}
         if action == 'verify':
