@@ -43,6 +43,12 @@ class ConversationSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
     created_by_id = serializers.SerializerMethodField()
+    my_pending_leave_at = serializers.SerializerMethodField()
+    adaptation_mode_active = serializers.SerializerMethodField()
+    adaptation_mode_until = serializers.SerializerMethodField()
+    group_id = serializers.SerializerMethodField()
+    recovery_eligible_date = serializers.SerializerMethodField()
+    streak = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
@@ -51,6 +57,8 @@ class ConversationSerializer(serializers.ModelSerializer):
             'name', 'is_group', 'avatar', 'display_name', 'created_by_id',
             'live_room_type', 'required_habit_slug', 'capacity', 'privacy',
             'join_policy', 'pomodoro_work_minutes', 'pomodoro_break_minutes',
+            'my_pending_leave_at', 'adaptation_mode_active', 'adaptation_mode_until', 'group_id',
+            'recovery_eligible_date', 'streak',
         ]
 
     def get_last_message(self, obj):
@@ -77,6 +85,63 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def get_created_by_id(self, obj):
         return str(obj.created_by_id) if obj.created_by_id else None
+
+    def get_my_pending_leave_at(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated and hasattr(obj, 'habit_group') and obj.habit_group:
+            member = obj.habit_group.memberships.filter(user=request.user).first()
+            if member:
+                return member.pending_leave_at
+        return None
+
+    def get_adaptation_mode_active(self, obj):
+        if hasattr(obj, 'habit_group') and obj.habit_group:
+            return obj.habit_group.adaptation_mode_active
+        return False
+
+    def get_adaptation_mode_until(self, obj):
+        if hasattr(obj, 'habit_group') and obj.habit_group:
+            return obj.habit_group.adaptation_mode_until
+        return None
+
+    def get_group_id(self, obj):
+        if hasattr(obj, 'habit_group') and obj.habit_group:
+            return obj.habit_group.id
+        return None
+
+    def get_recovery_eligible_date(self, obj):
+        group = getattr(obj, 'habit_group', None)
+        if group:
+            return group.recovery_eligible_date
+        from habits.models import HabitConnection
+        from django.db.models import Q
+        participants = obj.participants.all()
+        if len(participants) == 2:
+            conn = HabitConnection.objects.filter(
+                (Q(user1=participants[0]) & Q(user2=participants[1])) |
+                (Q(user1=participants[1]) & Q(user2=participants[0])),
+                status='accepted'
+            ).first()
+            if conn:
+                return conn.recovery_eligible_date
+        return None
+
+    def get_streak(self, obj):
+        group = getattr(obj, 'habit_group', None)
+        if group:
+            return group.streak
+        from habits.models import HabitConnection
+        from django.db.models import Q
+        participants = obj.participants.all()
+        if len(participants) == 2:
+            conn = HabitConnection.objects.filter(
+                (Q(user1=participants[0]) & Q(user2=participants[1])) |
+                (Q(user1=participants[1]) & Q(user2=participants[0])),
+                status='accepted'
+            ).first()
+            if conn:
+                return conn.streak
+        return 0
 
 class StorySerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
