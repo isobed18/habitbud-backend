@@ -13,6 +13,7 @@ from .forms import CustomUserCreationForm
 from .serializers import UserSerializer, UserRegistrationSerializer, ReminderSerializer, NotificationSerializer
 from .models import Reminder, Notification
 from django.db.models import Q
+from django.db import transaction
 
 User = get_user_model()
 
@@ -298,6 +299,25 @@ class AvatarModelListView(APIView):
         return Response(AvatarModelSerializer(qs, many=True, context={'request': request}).data)
 
 
+class StoreCatalogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .entitlements import STORE_ITEMS
+        items = []
+        for item in STORE_ITEMS.values():
+            items.append({
+                **item,
+                "owned": getattr(request.user, item["owned_field"], 0),
+                "currency": "gems",
+            })
+        return Response({
+            "currency": "gems",
+            "balance": request.user.points,
+            "items": items,
+        })
+
+
 class BlockListView(APIView):
     """List users the current user has blocked."""
     permission_classes = [IsAuthenticated]
@@ -336,17 +356,22 @@ class BuyStreakFreezeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        user = request.user
-        cost = 20
-        if user.points < cost:
-            return Response({'error': 'Yetersiz elmas. Seri Dondurucu satın almak için 20 elmas gerekiyor.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        user.points -= cost
-        user.streak_freezes += 1
-        user.save(update_fields=['points', 'streak_freezes'])
-        
+        from .entitlements import STORE_ITEMS
+        item = STORE_ITEMS["streak_freeze"]
+
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=request.user.pk)
+            cost = item["price_gems"]
+            if user.points < cost:
+                return Response({'error': f'Yetersiz elmas. Seri Dondurucu satin almak icin {cost} elmas gerekiyor.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            user.points -= cost
+            user.streak_freezes += 1
+            user.save(update_fields=['points', 'streak_freezes'])
+
         return Response({
-            'message': 'Seri Dondurucu başarıyla satın alındı! ❄️',
+            'message': 'Seri Dondurucu basariyla satin alindi!',
             'points': user.points,
-            'streak_freezes': user.streak_freezes
+            'streak_freezes': user.streak_freezes,
+            'item': item["id"],
         }, status=status.HTTP_200_OK)

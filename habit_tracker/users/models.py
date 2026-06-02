@@ -18,6 +18,7 @@ class CustomUser(AbstractUser):
     level = models.PositiveIntegerField(default=1)
     points = models.PositiveIntegerField(default=0)
     streak_freezes = models.PositiveIntegerField(default=0)
+    is_paid = models.BooleanField(default=False)
     
     # Settings
     timezone = models.CharField(max_length=50, default='Europe/Istanbul')

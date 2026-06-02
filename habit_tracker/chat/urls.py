@@ -8,6 +8,9 @@ from .views import (
     StartConversationView,
     CreateRoomView,
     RoomMembershipView,
+    LiveRoomDiscoveryView,
+    LiveRoomJoinRequestView,
+    LiveRoomJoinRequestRespondView,
     ProofSubmissionView,
     VerifyProofView,
     RecallCheckView,
@@ -26,7 +29,10 @@ urlpatterns = [
 
     # Group chat rooms
     path('rooms/', CreateRoomView.as_view(), name='room-create'),
+    path('rooms/discover/', LiveRoomDiscoveryView.as_view(), name='room-discover'),
     path('rooms/<uuid:conversation_id>/membership/', RoomMembershipView.as_view(), name='room-membership'),
+    path('rooms/<uuid:conversation_id>/join-request/', LiveRoomJoinRequestView.as_view(), name='room-join-request'),
+    path('rooms/join-requests/<uuid:request_id>/respond/', LiveRoomJoinRequestRespondView.as_view(), name='room-join-request-respond'),
 
     # Get all messages for a conversation and create a new message
     path('conversations/<uuid:conversation_id>/messages/', MessageListView.as_view(), name='message-list'),

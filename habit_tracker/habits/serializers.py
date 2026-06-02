@@ -14,12 +14,13 @@ class HabitSerializer(serializers.ModelSerializer):
             'total_time', 'target_time', 
             'verified_count', 'verification_streak',
             'streak_tier', 'streak_tier_name',
-            'color', 'icon'
+            'color', 'icon',
+            'schedule_type', 'schedule_weekdays', 'schedule_target_count', 'schedule_locked',
         ]
         read_only_fields = [
             'streak', 'completed_count', 'last_completed_date', 
             'verified_count', 'verification_streak',
-            'streak_tier', 'streak_tier_name',
+            'streak_tier', 'streak_tier_name', 'schedule_locked',
         ]
 
     def get_streak_tier(self, obj):
@@ -45,6 +46,34 @@ class HabitSerializer(serializers.ModelSerializer):
              raise serializers.ValidationError({
                 "target_time": "Target time is required for time-based habits."
             })
+
+        schedule_type = data.get("schedule_type", instance.schedule_type if instance else "daily")
+        weekdays = data.get("schedule_weekdays", instance.schedule_weekdays if instance else "")
+        schedule_target = data.get("schedule_target_count", instance.schedule_target_count if instance else 1) or 1
+        try:
+            schedule_target = int(schedule_target)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({"schedule_target_count": "Schedule target must be a number."})
+
+        if schedule_type == 'specific_weekdays':
+            try:
+                selected = {int(x) for x in str(weekdays).split(',') if x != ''}
+            except ValueError:
+                raise serializers.ValidationError({"schedule_weekdays": "Weekdays must be comma-separated numbers."})
+            if not selected or any(day < 0 or day > 6 for day in selected):
+                raise serializers.ValidationError({"schedule_weekdays": "Select at least one weekday between 0 and 6."})
+
+        if schedule_type == 'weekly_count' and not (1 <= schedule_target <= 7):
+            raise serializers.ValidationError({"schedule_target_count": "Weekly target must be between 1 and 7."})
+        if schedule_type == 'monthly_count' and not (1 <= schedule_target <= 31):
+            raise serializers.ValidationError({"schedule_target_count": "Monthly target must be between 1 and 31."})
+
+        if instance and instance.schedule_locked:
+            locked_fields = {'frequency', 'schedule_type', 'schedule_weekdays', 'schedule_target_count'}
+            if any(field in data and data[field] != getattr(instance, field) for field in locked_fields):
+                raise serializers.ValidationError({
+                    "schedule": "Schedule cannot be changed after this habit has progress."
+                })
         return data
 
 

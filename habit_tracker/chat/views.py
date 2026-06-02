@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
-from .models import Conversation, ChatMessage
+from .models import Conversation, ChatMessage, LiveRoomJoinRequest
 from .serializers import ConversationSerializer, ChatMessageSerializer
 from friends.models import Friendship
 from django.db.models import Q, Count
@@ -174,6 +174,81 @@ class RoomMembershipView(APIView):
         room.participants.remove(request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+class LiveRoomDiscoveryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Conversation.objects.filter(
+            is_group=True,
+            privacy=Conversation.RoomPrivacy.PUBLIC,
+        ).exclude(live_room_type=Conversation.LiveRoomType.GENERAL).prefetch_related('participants')
+
+        room_type = request.query_params.get('type')
+        if room_type in Conversation.LiveRoomType.values:
+            qs = qs.filter(live_room_type=room_type)
+
+        rooms = []
+        for room in qs.order_by('-created_at')[:50]:
+            data = ConversationSerializer(room, context={'request': request}).data
+            data['participant_count'] = room.participants.count()
+            data['has_join_request'] = LiveRoomJoinRequest.objects.filter(room=room, user=request.user, status='pending').exists()
+            rooms.append(data)
+        return Response(rooms)
+
+
+class LiveRoomJoinRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, conversation_id):
+        room = get_object_or_404(Conversation, id=conversation_id, is_group=True, created_by=request.user)
+        data = [
+            {
+                'id': str(req.id),
+                'user': {'id': str(req.user.id), 'username': req.user.username},
+                'status': req.status,
+                'created_at': req.created_at,
+            }
+            for req in room.join_requests.filter(status='pending').select_related('user')
+        ]
+        return Response(data)
+
+    def post(self, request, conversation_id):
+        room = get_object_or_404(Conversation, id=conversation_id, is_group=True)
+        if request.user in room.participants.all():
+            return Response({'error': 'Already a member.'}, status=status.HTTP_400_BAD_REQUEST)
+        if room.participants.count() >= room.capacity:
+            return Response({'error': 'Room is full.'}, status=status.HTTP_400_BAD_REQUEST)
+        if room.join_policy == Conversation.JoinPolicy.OPEN:
+            room.participants.add(request.user)
+            return Response(ConversationSerializer(room, context={'request': request}).data)
+
+        req, _ = LiveRoomJoinRequest.objects.update_or_create(
+            room=room,
+            user=request.user,
+            defaults={'status': 'pending'},
+        )
+        return Response({'id': str(req.id), 'status': req.status}, status=status.HTTP_201_CREATED)
+
+
+class LiveRoomJoinRequestRespondView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, request_id):
+        action = request.data.get('action')
+        if action not in ['accept', 'decline']:
+            return Response({'error': 'Invalid action.'}, status=status.HTTP_400_BAD_REQUEST)
+        req = get_object_or_404(LiveRoomJoinRequest, id=request_id, room__created_by=request.user, status='pending')
+        if action == 'accept':
+            if req.room.participants.count() >= req.room.capacity:
+                return Response({'error': 'Room is full.'}, status=status.HTTP_400_BAD_REQUEST)
+            req.room.participants.add(req.user)
+            req.status = 'accepted'
+        else:
+            req.status = 'declined'
+        req.save(update_fields=['status'])
+        return Response({'status': req.status})
+
 class MessageListView(generics.ListAPIView):
     serializer_class = ChatMessageSerializer
     permission_classes = [IsAuthenticated]
@@ -222,6 +297,18 @@ class ProofSubmissionView(APIView):
         """
         Social Proof Submission: Sends a proof image to a friend/conversation.
         """
+        from users.entitlements import get_limits, today
+        limits = get_limits(request.user)
+        submit_limit = limits.get('proof_submissions_per_day')
+        if submit_limit is not None:
+            used = ChatMessage.objects.filter(
+                sender=request.user,
+                message_type=ChatMessage.MessageType.PROOF,
+                created_at__date=today(),
+            ).count()
+            if used >= submit_limit:
+                return Response({'error': f'Free plan daily proof submission limit reached ({submit_limit}).'}, status=status.HTTP_403_FORBIDDEN)
+
         habit_id = request.data.get('habit_id')
         conversation_id = request.data.get('conversation_id')
         friend_id = request.data.get('friend_id')
@@ -358,6 +445,19 @@ class VerifyProofView(APIView):
         # Without this, repeated 'verify' calls would award XP/diamonds each time.
         if proof_message.verification_status != ChatMessage.VerificationStatus.PENDING:
             return Response({'error': 'Bu check zaten işlendi.'}, status=status.HTTP_409_CONFLICT)
+
+        from users.entitlements import get_limits, today
+        limits = get_limits(request.user)
+        verify_limit = limits.get('proof_verifications_per_day')
+        if action == 'verify' and verify_limit is not None:
+            used = ChatMessage.objects.filter(
+                conversation__participants=request.user,
+                message_type=ChatMessage.MessageType.PROOF,
+                verification_status=ChatMessage.VerificationStatus.VERIFIED,
+                created_at__date=today(),
+            ).exclude(sender=request.user).count()
+            if used >= verify_limit:
+                return Response({'error': f'Free plan daily verification limit reached ({verify_limit}).'}, status=status.HTTP_403_FORBIDDEN)
 
         reward_info = {}
         if action == 'verify':

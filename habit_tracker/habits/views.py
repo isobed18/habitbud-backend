@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from .models import Habit
 from .forms import HabitForm
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes
 from .serializers import HabitSerializer
@@ -85,6 +85,12 @@ class HabitListView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        from users.entitlements import get_limits
+        limits = get_limits(request.user)
+        habit_limit = limits.get('habits')
+        if habit_limit is not None and Habit.objects.filter(user=request.user).count() >= habit_limit:
+            return Response({'error': f'Free plan habit limit reached ({habit_limit}).'}, status=status.HTTP_403_FORBIDDEN)
+
         serializer = HabitSerializer(data=request.data)
         if serializer.is_valid():
             # The serializer will create the habit and associate the user
@@ -136,6 +142,7 @@ class HabitDetailView(APIView):
         serializer.save()
 
         habit.update_and_recalculate()
+        habit.lock_schedule_if_needed()
         
         # CACHE TEMİZLEME EKLENDİ
         cache_key = f'user_{request.user.id}_habits'
@@ -158,6 +165,10 @@ class HabitStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, habit_id):
+        from users.entitlements import get_limits
+        if not get_limits(request.user).get('stats_enabled'):
+            return Response({'error': 'Stats are available on the paid plan.'}, status=status.HTTP_403_FORBIDDEN)
+
         habit = get_object_or_404(Habit, id=habit_id, user=request.user)
         from .models import HabitCompletion, HabitHistory
         

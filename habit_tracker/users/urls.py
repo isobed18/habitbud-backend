@@ -28,6 +28,7 @@ urlpatterns = [
 
     # 3D avatar base models (for Avatar Studio)
     path('api/avatar-models/', views.AvatarModelListView.as_view(), name='avatar-models'),
+    path('api/store/', views.StoreCatalogView.as_view(), name='store-catalog'),
     path('api/buy-freeze/', views.BuyStreakFreezeView.as_view(), name='buy-freeze'),
 
     # Shortcuts

@@ -44,6 +44,16 @@ class Habit(models.Model):
     last_reset_date = models.DateField(default=timezone.now, db_index=True)
     FREQUENCY_CHOICES = [('daily', 'Daily'), ('weekly', 'Weekly'), ('monthly', 'Monthly'), ('custom', 'Custom')]
     frequency = models.CharField(max_length=10, choices=FREQUENCY_CHOICES, db_index=True)
+    SCHEDULE_CHOICES = [
+        ('daily', 'Daily'),
+        ('specific_weekdays', 'Specific weekdays'),
+        ('weekly_count', 'Times per week'),
+        ('monthly_count', 'Times per month'),
+    ]
+    schedule_type = models.CharField(max_length=20, choices=SCHEDULE_CHOICES, default='daily')
+    schedule_weekdays = models.CharField(max_length=20, blank=True, default='', help_text='Comma-separated weekday numbers, Monday=0.')
+    schedule_target_count = models.PositiveSmallIntegerField(default=1)
+    schedule_locked = models.BooleanField(default=False)
     
     COLOR_CHOICES = [
         ('green', 'Green'),
@@ -56,6 +66,22 @@ class Habit(models.Model):
     color = models.CharField(max_length=10, choices=COLOR_CHOICES, default='blue')
     icon = models.CharField(max_length=8, blank=True, default='', help_text="Emoji shown for this habit, e.g. 💧")
     custom_frequency_days = models.IntegerField(null=True, blank=True)
+
+    def lock_schedule_if_needed(self):
+        if not self.schedule_locked and (self.completions.exists() or self.verifications.exists() or self.has_progress_today()):
+            self.schedule_locked = True
+            self.save(update_fields=['schedule_locked'])
+
+    def is_due_on(self, day):
+        if self.schedule_type == 'specific_weekdays':
+            if not self.schedule_weekdays:
+                return True
+            try:
+                days = {int(x) for x in self.schedule_weekdays.split(',') if x != ''}
+            except ValueError:
+                return True
+            return day.weekday() in days
+        return True
 
     class Meta:
         indexes = [
@@ -92,6 +118,9 @@ class Habit(models.Model):
         Frequency-aware: daily = 1 day gap, weekly = 7 day gap, etc.
         Supports Streak Freeze mechanic for daily habits.
         """
+        if self.schedule_type in ('weekly_count', 'monthly_count'):
+            return self._calculate_period_streak()
+
         if self.frequency != 'daily':
             return self._calculate_streak_legacy()
         
@@ -119,10 +148,61 @@ class Habit(models.Model):
             elif current_date in freezes:
                 # Frozen day preserves the streak but doesn't increment
                 pass
+            elif not self.is_due_on(current_date):
+                pass
             else:
                 break
             current_date -= timedelta(days=1)
             
+        return streak
+
+    def _calculate_period_streak(self):
+        completions = set(self.completions.values_list('completed_at', flat=True))
+        if not completions:
+            return 0
+
+        today = timezone.now().date()
+        target = max(1, self.schedule_target_count or 1)
+        streak = 0
+
+        if self.schedule_type == 'weekly_count':
+            period_start = today - timedelta(days=today.weekday())
+            step = timedelta(days=7)
+            period_days = 7
+        else:
+            period_start = today.replace(day=1)
+            step = None
+            period_days = None
+
+        while True:
+            if self.schedule_type == 'weekly_count':
+                start = period_start
+                end = start + timedelta(days=period_days - 1)
+                count = sum(1 for d in completions if start <= d <= end)
+                previous = start - step
+                period_start = previous
+            else:
+                start = period_start
+                if start.month == 12:
+                    next_month = start.replace(year=start.year + 1, month=1)
+                else:
+                    next_month = start.replace(month=start.month + 1)
+                end = next_month - timedelta(days=1)
+                count = sum(1 for d in completions if start <= d <= end)
+                previous_month_end = start - timedelta(days=1)
+                period_start = previous_month_end.replace(day=1)
+
+            is_current_period = start <= today <= end
+            if count >= target:
+                streak += 1
+            elif is_current_period:
+                pass
+            else:
+                break
+
+            if start < min(completions):
+                break
+
         return streak
 
     def _calculate_streak_legacy(self):
