@@ -11,13 +11,17 @@ feedback, levels, and push notifications keep you coming back.
 
 ## 🌟 Core Features
 
-- **📸 Checks (social proof)**: Snap a photo of your habit and send it to friends. They approve → you score.
-- **🔥 Streaks & XP**: Verified checks build habit + friendship streaks that multiply your XP. Milestones (5/7/14/30/60/100 days) trigger celebrations.
+- **🐻 3D Animal Avatars & Dress-up System**: Personal 3D plushy animals (generated from 2D via Hunyuan3D-2) that breathing, bounce, tilt, and can be rotated with smooth inertia. Equipped with custom items (beanies, glasses, wands, books) attached to local anchors (`head`, `face`, `hand`, `back`, `neck`).
+- **🛒 Gamification & Item Store**: Decoupled progression system dividing character Level/XP (lightning ⚡) from shop currency (diamonds 💎). Earn diamonds by levelling up and completing challenges, then spend them on Streak Freezes (❄️) or customizing your avatar.
+- **❄️ Automated Streak Freezing**: Safeguards streaks when a check-in is missed. Automatically checks timezone-aware daily completions, uses a Streak Freeze from the user's inventory, and alerts the user.
+- **📸 Checks (social proof)**: Snap a photo of your habit and send it to friends. They approve → you score. Features an **Undo (Geri Al) Slider** with a 4.5s countdown recall window to retract uploads.
+- **🔥 Streaks & XP Multipliers**: Verified checks build habit + friendship streaks that multiply your XP. Milestones (5/7/14/30/60/100 days) trigger full-screen celebrations.
 - **✅ Preset habit library**: One-tap habits (Su İç 💧, Yürüyüş 🚶, Spor 🏋️, Kitap 📖, Meditasyon 🧘, …) each with their own smart reminder copy.
 - **🔔 Smart push notifications**: Habit-aware reminders ("Bugün su check'ini göndermeyi unutma 💧") and streak-at-risk nudges, delivered via Expo Push.
-- **💬 Chat & group rooms**: 1:1 messaging plus group chat rooms, real-time over WebSockets.
+- **💬 Chat & group rooms**: 1:1 messaging plus group chat rooms, real-time over WebSockets. Sober Snapchat/Instagram style chat bubbles linked directly to profiles.
 - **📱 24-hour Stories**: Share progress that expires after a day (Snapchat-inspired).
-- **🏆 Challenges, achievements, leaderboards**: Solo/duo challenges, badges, and friendly competition.
+- **🏆 Challenges & Badges (Achievements)**: Solo/duo structured challenges (e.g. 30 Day Gym Rats, 7 Day Water Warrior) rewarding XP, diamonds, items, and permanent collectible badges.
+- **✨ Premium Visual Effects & Haptics**: Full-screen Lottie confetti explosions, spring-animated floating reward chips, haptic clicks, and pulse animations for status changes.
 
 ## 🎮 Scoring (GamificationEngine)
 
