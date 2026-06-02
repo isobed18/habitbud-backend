@@ -64,7 +64,7 @@ class ChatMessage(models.Model):
         REJECTED = 'REJECTED', 'Rejected'
     
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_messages", null=True, blank=True)
     
     content = models.TextField(blank=True)
     message_type = models.CharField(max_length=10, choices=MessageType.choices, default=MessageType.TEXT)

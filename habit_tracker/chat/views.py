@@ -511,24 +511,34 @@ class VerifyProofView(APIView):
                     if all(m.verified_today for m in all_members):
                         # Group Completed today!
                         if group_habit.last_completed_date != today_date:
-                            if group_habit.last_completed_date == yesterday_date:
-                                group_habit.streak += 1
-                            else:
-                                group_habit.streak = 1
-                            group_habit.best_streak = max(group_habit.best_streak, group_habit.streak)
-                            group_habit.last_completed_date = today_date
-                            group_habit.save()
-
-                            # Group Complete Bonus to all members
-                            for m in all_members:
-                                UserService.add_xp(m.user, 50)
-                                UserService.add_points(m.user, 10)
-                                notify(
-                                    m.user,
-                                    f"Grup Alışkanlığı Tamamlandı! 🔥 (Seri: {group_habit.streak})",
-                                    f"'{group_habit.name}' grubundaki herkes hedefini tamamladı! +50 XP ve +10 💎 kazandınız!",
-                                    ntype='SUCCESS'
+                            if group_habit.adaptation_mode_active:
+                                group_habit.last_completed_date = today_date
+                                group_habit.save()
+                                ChatMessage.objects.create(
+                                    conversation=conversation,
+                                    sender=None,
+                                    content="Bugün herkes hedefini tamamladı! (Grup Adaptasyon Modunda, seri ilerlemedi)",
+                                    message_type=ChatMessage.MessageType.TEXT
                                 )
+                            else:
+                                if group_habit.last_completed_date == yesterday_date:
+                                    group_habit.streak += 1
+                                else:
+                                    group_habit.streak = 1
+                                group_habit.best_streak = max(group_habit.best_streak, group_habit.streak)
+                                group_habit.last_completed_date = today_date
+                                group_habit.save()
+
+                                # Group Complete Bonus to all members
+                                for m in all_members:
+                                    UserService.add_xp(m.user, 50)
+                                    UserService.add_points(m.user, 10)
+                                    notify(
+                                        m.user,
+                                        f"Grup Alışkanlığı Tamamlandı! 🔥 (Seri: {group_habit.streak})",
+                                        f"'{group_habit.name}' grubundaki herkes hedefini tamamladı! +50 XP ve +10 💎 kazandınız!",
+                                        ntype='SUCCESS'
+                                    )
                                 # WebSocket broadcast for group completion
                                 try:
                                     channel_layer = get_channel_layer()

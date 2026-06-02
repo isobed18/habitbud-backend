@@ -126,7 +126,7 @@ class HabitGroupMemberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = HabitGroupMember
-        fields = ['id', 'user', 'habit', 'verified_today', 'last_verified_date']
+        fields = ['id', 'user', 'habit', 'verified_today', 'last_verified_date', 'pending_leave_at']
 
 class HabitGroupSerializer(serializers.ModelSerializer):
     creator = UserMiniSerializer(read_only=True)
@@ -137,6 +137,7 @@ class HabitGroupSerializer(serializers.ModelSerializer):
         model = HabitGroup
         fields = [
             'id', 'name', 'creator', 'streak', 'best_streak',
-            'last_completed_date', 'memberships', 'created_at', 'conversation_id'
+            'last_completed_date', 'memberships', 'created_at', 'conversation_id',
+            'adaptation_mode_active', 'adaptation_mode_until'
         ]
         read_only_fields = fields

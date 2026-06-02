@@ -518,6 +518,10 @@ class HabitConnection(models.Model):
     user2_verified_today = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Streak Recovery
+    pre_recovery_streak = models.IntegerField(default=0)
+    recovery_eligible_date = models.DateField(null=True, blank=True)
+
     class Meta:
         unique_together = ('habit1', 'user2')
 
@@ -529,11 +533,71 @@ class HabitConnection(models.Model):
         except Exception:
             today = timezone.now().date()
             
-        if today > self.last_reset_date:
+        import datetime
+        last_reset = self.last_reset_date
+        if isinstance(last_reset, datetime.datetime):
+            last_reset = last_reset.date()
+            
+        if today > last_reset:
+            yesterday_date = last_reset
+            # Check if yesterday was completed
+            completed_yesterday = self.user1_verified_today and self.user2_verified_today
+            
+            # Find the conversation
+            from chat.models import Conversation, ChatMessage
+            from django.db.models import Count
+            conversation = Conversation.objects.annotate(p_count=Count('participants')).filter(
+                participants=self.user1
+            ).filter(
+                participants=self.user2
+            ).filter(
+                p_count=2, is_group=False
+            ).first()
+
+            if not completed_yesterday and self.status == 'accepted':
+                # Try saving using reserves
+                reserve = None
+                if conversation:
+                    reserve = GroupReserve.objects.filter(conversation=conversation, used=False).first()
+                
+                if reserve:
+                    reserve.used = True
+                    reserve.can_withdraw = False
+                    reserve.save(update_fields=['used', 'can_withdraw'])
+                    
+                    RoomFreezeUsage.objects.create(conversation=conversation, date=yesterday_date)
+                    
+                    if conversation:
+                        ChatMessage.objects.create(
+                            conversation=conversation,
+                            sender=None,
+                            content="Streak automatically saved via Group Reserve",
+                            message_type=ChatMessage.MessageType.TEXT
+                        )
+                else:
+                    # Streak breaks reactively
+                    if self.streak > 0:
+                        self.pre_recovery_streak = self.streak
+                        self.streak = 0
+                        self.recovery_eligible_date = yesterday_date
+                        
+                        if conversation:
+                            ChatMessage.objects.create(
+                                conversation=conversation,
+                                sender=None,
+                                content="Streak in danger! Use a freeze to recover it.",
+                                message_type=ChatMessage.MessageType.TEXT
+                            )
+                        
+                        # Notify users
+                        from users.notifications import notify
+                        for u in [self.user1, self.user2]:
+                            notify(u, "Serin Tehlikede! ❄️", f"'{self.habit_name}' ortak serinizi korumak için dondurucu kullanın!", ntype='WARNING')
+            
             self.user1_verified_today = False
             self.user2_verified_today = False
             self.last_reset_date = today
-            self.save(update_fields=['user1_verified_today', 'user2_verified_today', 'last_reset_date'])
+            self.save(update_fields=['user1_verified_today', 'user2_verified_today', 'last_reset_date', 'pre_recovery_streak', 'streak', 'recovery_eligible_date'])
 
     def __str__(self):
         return f"{self.habit_name} Connection: {self.user1.username} <-> {self.user2.username}"
@@ -551,18 +615,128 @@ class HabitGroup(models.Model):
     last_reset_date = models.DateField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Streak Recovery
+    pre_recovery_streak = models.IntegerField(default=0)
+    recovery_eligible_date = models.DateField(null=True, blank=True)
+
+    # Adaptation Mode
+    adaptation_mode_active = models.BooleanField(default=False)
+    adaptation_mode_until = models.DateField(null=True, blank=True)
+
     def check_and_reset_progress(self):
         import pytz
+        from django.utils import timezone
+        import datetime
         try:
             user_tz = pytz.timezone(self.creator.timezone)
             today = timezone.now().astimezone(user_tz).date()
         except Exception:
             today = timezone.now().date()
+
+        # 1. Process pending leaves
+        cutoff = timezone.now() - datetime.timedelta(hours=24)
+        leaving_members = self.memberships.filter(pending_leave_at__lte=cutoff)
+        has_leaves = leaving_members.exists()
+        for m in leaving_members:
+            if self.conversation:
+                self.conversation.participants.remove(m.user)
+                from chat.models import ChatMessage
+                ChatMessage.objects.create(
+                    conversation=self.conversation,
+                    sender=None,
+                    content=f"@{m.user.username} gruptan ayrıldı. Grup 7 günlük Adaptasyon Modu'na girdi!",
+                    message_type=ChatMessage.MessageType.TEXT
+                )
+            self.adaptation_mode_active = True
+            self.adaptation_mode_until = today + datetime.timedelta(days=7)
+            m.delete()
+        if has_leaves:
+            self.save(update_fields=['adaptation_mode_active', 'adaptation_mode_until'])
+
+        last_reset = self.last_reset_date
+        if isinstance(last_reset, datetime.datetime):
+            last_reset = last_reset.date()
+
+        # 2. Reset and verify progress
+        if today > last_reset:
+            yesterday_date = last_reset
             
-        if today > self.last_reset_date:
+            # Check if yesterday was completed
+            all_members = self.memberships.all()
+            completed_yesterday = all_members.exists() and all(m.verified_today for m in all_members)
+            
+            if not completed_yesterday:
+                if self.adaptation_mode_active:
+                    # Sıfır Tolerans!
+                    self.streak = 0
+                    self.adaptation_mode_active = False
+                    self.adaptation_mode_until = None
+                    if self.conversation:
+                        from chat.models import ChatMessage
+                        ChatMessage.objects.create(
+                            conversation=self.conversation,
+                            sender=None,
+                            content="Adaptasyon Modu'nda fire verildi! Grup serisi sıfırlandı.",
+                            message_type=ChatMessage.MessageType.TEXT
+                        )
+                else:
+                    # Try proactive save
+                    reserve = None
+                    if self.conversation:
+                        reserve = GroupReserve.objects.filter(conversation=self.conversation, used=False).first()
+                        
+                    if reserve:
+                        reserve.used = True
+                        reserve.can_withdraw = False
+                        reserve.save(update_fields=['used', 'can_withdraw'])
+                        
+                        RoomFreezeUsage.objects.create(conversation=self.conversation, date=yesterday_date)
+                        
+                        if self.conversation:
+                            from chat.models import ChatMessage
+                            ChatMessage.objects.create(
+                                conversation=self.conversation,
+                                sender=None,
+                                content="Streak automatically saved via Group Reserve",
+                                message_type=ChatMessage.MessageType.TEXT
+                            )
+                    else:
+                        # Reactive recovery setup
+                        if self.streak > 0:
+                            self.pre_recovery_streak = self.streak
+                            self.streak = 0
+                            self.recovery_eligible_date = yesterday_date
+                            
+                            if self.conversation:
+                                from chat.models import ChatMessage
+                                ChatMessage.objects.create(
+                                    conversation=self.conversation,
+                                    sender=None,
+                                    content="Streak in danger! Use a freeze to recover it.",
+                                    message_type=ChatMessage.MessageType.TEXT
+                                )
+                            
+                            # Notify users
+                            from users.notifications import notify
+                            for m in all_members:
+                                notify(m.user, "Serin Tehlikede! ❄️", f"'{self.name}' grup serinizi korumak için dondurucu kullanın!", ntype='WARNING')
+            
+            # 3. Handle adaptation mode completion
+            if self.adaptation_mode_active and today > self.adaptation_mode_until:
+                self.adaptation_mode_active = False
+                self.adaptation_mode_until = None
+                if self.conversation:
+                    from chat.models import ChatMessage
+                    ChatMessage.objects.create(
+                        conversation=self.conversation,
+                        sender=None,
+                        content="Adaptasyon Modu başarıyla tamamlandı! Grup serisi normal takibe döndü.",
+                        message_type=ChatMessage.MessageType.TEXT
+                    )
+            
             self.memberships.all().update(verified_today=False)
             self.last_reset_date = today
-            self.save(update_fields=['last_reset_date'])
+            self.save(update_fields=['last_reset_date', 'adaptation_mode_active', 'adaptation_mode_until', 'pre_recovery_streak', 'streak', 'recovery_eligible_date'])
 
     def __str__(self):
         return f"Group Habit: {self.name}"
@@ -574,10 +748,38 @@ class HabitGroupMember(models.Model):
     habit = models.ForeignKey(Habit, on_delete=models.CASCADE, related_name='group_memberships')
     verified_today = models.BooleanField(default=False)
     last_verified_date = models.DateField(null=True, blank=True)
+    
+    # Gentle Departure / 24h Grace Period
+    pending_leave_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('group', 'user')
 
     def __str__(self):
         return f"{self.user.username} in {self.group.name}"
+
+
+class GroupReserve(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey('chat.Conversation', on_delete=models.CASCADE, related_name='reserves')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='group_reserves')
+    can_withdraw = models.BooleanField(default=True)
+    used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Reserve by {self.user.username} in Chat {self.conversation.id}"
+
+
+class RoomFreezeUsage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    conversation = models.ForeignKey('chat.Conversation', on_delete=models.CASCADE, related_name='freeze_usages')
+    date = models.DateField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('conversation', 'date')
+
+    def __str__(self):
+        return f"Freeze applied to Chat {self.conversation.id} on {self.date}"
 

@@ -4,6 +4,7 @@ from rest_framework import status
 from habits.models import Habit, HabitConnection, HabitGroup, HabitGroupMember
 from chat.models import Conversation, ChatMessage
 from django.urls import reverse
+from django.db.models import Count, Q
 import datetime
 
 User = get_user_model()
@@ -243,4 +244,179 @@ class HabitJunctionTests(APITestCase):
         res = self.client.post(url, data)
         self.assertEqual(res.status_code, status.HTTP_409_CONFLICT)
         self.assertIn("zaten ortak bir 'Water Intake' grubundasınız", res.data['error'])
+
+    def test_group_reserve_and_automatic_save(self):
+        # Create group
+        conv = Conversation.objects.create(name='Group Conv', is_group=True)
+        conv.participants.add(self.u1, self.u2, self.u3)
+        group = HabitGroup.objects.create(name='Water Intake', creator=self.u1, conversation=conv, streak=3)
+        
+        m1 = HabitGroupMember.objects.create(group=group, user=self.u1, habit=self.h1)
+        h2 = Habit.objects.create(user=self.u2, name='Water Intake', habit_type='count', target_count=5)
+        m2 = HabitGroupMember.objects.create(group=group, user=self.u2, habit=h2)
+        h3 = Habit.objects.create(user=self.u3, name='Water Intake', habit_type='count', target_count=5)
+        m3 = HabitGroupMember.objects.create(group=group, user=self.u3, habit=h3)
+
+        # Give Bob a freeze and reserve it
+        self.u2.streak_freezes = 2
+        self.u2.save()
+        
+        self.client.force_authenticate(user=self.u2)
+        url = reverse('group-reserve', kwargs={'conversation_id': conv.id})
+        res = self.client.post(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        self.u2.refresh_from_db()
+        self.assertEqual(self.u2.streak_freezes, 1)
+        self.assertEqual(group.conversation.reserves.count(), 1)
+        
+        # Withdraw reserve
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.u2.refresh_from_db()
+        self.assertEqual(self.u2.streak_freezes, 2)
+        self.assertEqual(group.conversation.reserves.count(), 0)
+
+        # Reserve again
+        res = self.client.post(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        # Simulate day change without completing habits yesterday
+        # Bob's reserve should save the group streak
+        group.last_reset_date = datetime.date.today() - datetime.timedelta(days=1)
+        group.save()
+        
+        group.check_and_reset_progress()
+        group.refresh_from_db()
+        
+        # Streak stays 3, and a freeze usage was recorded
+        self.assertEqual(group.streak, 3)
+        self.assertEqual(group.conversation.freeze_usages.count(), 1)
+        # Reserve is used
+        reserve = group.conversation.reserves.first()
+        self.assertTrue(reserve.used)
+        self.assertFalse(reserve.can_withdraw)
+
+    def test_reactive_streak_recovery(self):
+        conv = Conversation.objects.create()
+        conv.participants.add(self.u1, self.u2)
+
+        h2 = Habit.objects.create(user=self.u2, name='Water Intake', habit_type='count', target_count=5)
+        conn = HabitConnection.objects.create(
+            user1=self.u1, user2=self.u2, habit1=self.h1, habit2=h2,
+            habit_name=self.h1.name, status='accepted', streak=5
+        )
+        
+        # Day resets without completions -> streak becomes 0, eligible for recovery
+        conn.last_reset_date = datetime.date.today() - datetime.timedelta(days=1)
+        conn.save()
+        
+        conn.check_and_reset_progress()
+        conn.refresh_from_db()
+        self.assertEqual(conn.streak, 0)
+        self.assertEqual(conn.recovery_eligible_date, datetime.date.today() - datetime.timedelta(days=1))
+        
+        # Alice recovers it reactively
+        self.u1.streak_freezes = 1
+        self.u1.save()
+        
+        conv = Conversation.objects.annotate(p_count=Count('participants')).filter(
+            participants=self.u1
+        ).filter(
+            participants=self.u2
+        ).filter(p_count=2, is_group=False).first()
+        
+        self.client.force_authenticate(user=self.u1)
+        url = reverse('streak-recovery', kwargs={'conversation_id': conv.id})
+        res = self.client.post(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        conn.refresh_from_db()
+        self.assertEqual(conn.streak, 5) # Restored!
+        self.assertIsNone(conn.recovery_eligible_date)
+        
+        self.u1.refresh_from_db()
+        self.assertEqual(self.u1.streak_freezes, 0)
+
+    def test_pending_leave_and_adaptation_mode(self):
+        conv = Conversation.objects.create(name='Group Conv', is_group=True)
+        conv.participants.add(self.u1, self.u2, self.u3)
+        group = HabitGroup.objects.create(name='Water Intake', creator=self.u1, conversation=conv, streak=4)
+        
+        m1 = HabitGroupMember.objects.create(group=group, user=self.u1, habit=self.h1)
+        h2 = Habit.objects.create(user=self.u2, name='Water Intake', habit_type='count', target_count=5)
+        m2 = HabitGroupMember.objects.create(group=group, user=self.u2, habit=h2)
+        h3 = Habit.objects.create(user=self.u3, name='Water Intake', habit_type='count', target_count=5)
+        m3 = HabitGroupMember.objects.create(group=group, user=self.u3, habit=h3)
+
+        # Bob requests to leave
+        self.client.force_authenticate(user=self.u2)
+        url = reverse('habit-group-leave', kwargs={'group_id': group.id})
+        res = self.client.post(url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        m2.refresh_from_db()
+        self.assertIsNotNone(m2.pending_leave_at)
+        
+        # Simulate 24 hours later
+        from django.utils import timezone
+        m2.pending_leave_at = timezone.now() - datetime.timedelta(hours=25)
+        m2.save()
+        
+        group.check_and_reset_progress()
+        group.refresh_from_db()
+        
+        # Bob should be deleted from members, and adaptation mode active for 7 days
+        self.assertEqual(group.memberships.count(), 2)
+        self.assertTrue(group.adaptation_mode_active)
+        self.assertEqual(group.adaptation_mode_until, datetime.date.today() + datetime.timedelta(days=7))
+        
+        # If remaining members complete habits today, streak remains frozen (4)
+        self.h1.count = 5
+        self.h1.save()
+        h3.count = 5
+        h3.save()
+        
+        # Create proof verification
+        msg1 = ChatMessage.objects.create(
+            conversation=conv, sender=self.u1, message_type=ChatMessage.MessageType.PROOF,
+            related_habit=self.h1, verification_status=ChatMessage.VerificationStatus.PENDING
+        )
+        self.client.force_authenticate(user=self.u3)
+        res = self.client.post(reverse('check-verify', kwargs={'message_id': msg1.id}), {'action': 'verify'})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        msg2 = ChatMessage.objects.create(
+            conversation=conv, sender=self.u3, message_type=ChatMessage.MessageType.PROOF,
+            related_habit=h3, verification_status=ChatMessage.VerificationStatus.PENDING
+        )
+        self.client.force_authenticate(user=self.u1)
+        res = self.client.post(reverse('check-verify', kwargs={'message_id': msg2.id}), {'action': 'verify'})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        
+        group.refresh_from_db()
+        self.assertEqual(group.streak, 4) # Streak frozen!
+
+    def test_adaptation_mode_zero_tolerance(self):
+        conv = Conversation.objects.create(name='Group Conv', is_group=True)
+        conv.participants.add(self.u1, self.u2)
+        group = HabitGroup.objects.create(
+            name='Water Intake', creator=self.u1, conversation=conv, streak=4,
+            adaptation_mode_active=True, adaptation_mode_until=datetime.date.today() + datetime.timedelta(days=6)
+        )
+        
+        m1 = HabitGroupMember.objects.create(group=group, user=self.u1, habit=self.h1)
+        h3 = Habit.objects.create(user=self.u2, name='Water Intake', habit_type='count', target_count=5)
+        m3 = HabitGroupMember.objects.create(group=group, user=self.u2, habit=h3)
+        
+        # Day changes without all members completing
+        group.last_reset_date = datetime.date.today() - datetime.timedelta(days=1)
+        group.save()
+        
+        group.check_and_reset_progress()
+        group.refresh_from_db()
+        
+        # Zero tolerance -> streak becomes 0, adaptation mode deactivates
+        self.assertEqual(group.streak, 0)
+        self.assertFalse(group.adaptation_mode_active)
 

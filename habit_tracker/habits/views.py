@@ -270,7 +270,8 @@ from django.db import transaction
 from django.db.models import Q, Count
 from friends.models import Friendship
 from chat.models import Conversation
-from .models import HabitConnection, HabitGroup, HabitGroupMember
+from .models import HabitConnection, HabitGroup, HabitGroupMember, GroupReserve, RoomFreezeUsage
+from django.utils import timezone
 from .serializers import HabitConnectionSerializer, HabitGroupSerializer
 
 User = get_user_model()
@@ -534,3 +535,160 @@ class HabitGroupListView(APIView):
             group.check_and_reset_progress()
 
         return Response(HabitGroupSerializer(groups, many=True, context={'request': request}).data)
+
+
+class HabitGroupLeaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, group_id):
+        group = get_object_or_404(HabitGroup, id=group_id)
+        member = get_object_or_404(HabitGroupMember, group=group, user=request.user)
+
+        member.pending_leave_at = timezone.now()
+        member.save(update_fields=['pending_leave_at'])
+
+        if group.conversation:
+            from chat.models import ChatMessage
+            ChatMessage.objects.create(
+                conversation=group.conversation,
+                sender=None,
+                content=f"@{request.user.username} gruptan ayrılma talebinde bulundu. 24 saat sonra gruptan çıkarılacak.",
+                message_type=ChatMessage.MessageType.TEXT
+            )
+
+        return Response({'message': 'Ayrılma talebi alındı. 24 saat sonra gruptan ayrılacaksınız.'})
+
+
+class StreakRecoveryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, conversation_id):
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        if request.user not in conversation.participants.all():
+            return Response({'error': 'Bu konuşmanın katılımcısı değilsiniz.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Resolve model
+        group = getattr(conversation, 'habit_group', None)
+        model = None
+        if group:
+            model = group
+        else:
+            model = HabitConnection.objects.filter(
+                (Q(user1=request.user) & Q(user2__in=conversation.participants.all())) |
+                (Q(user2=request.user) & Q(user1__in=conversation.participants.all())),
+                status='accepted'
+            ).first()
+
+        if not model:
+            return Response({'error': 'Bu konuşma için bir bağlantı veya grup bulunamadı.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if group and group.adaptation_mode_active:
+            return Response({'error': 'Grup Adaptasyon Modunda, dondurucu kullanılamaz!'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not model.recovery_eligible_date:
+            return Response({'error': 'Bu oda için dondurucu ile kurtarılabilecek aktif bir kırılma yok.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.user.streak_freezes <= 0:
+            return Response({'error': 'Yeterli dondurucunuz yok.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Spend freeze
+        request.user.streak_freezes -= 1
+        request.user.save(update_fields=['streak_freezes'])
+
+        # Create usage record
+        RoomFreezeUsage.objects.create(conversation=conversation, date=model.recovery_eligible_date)
+
+        # Restore streak
+        model.streak = model.pre_recovery_streak
+        model.recovery_eligible_date = None
+        model.save(update_fields=['streak', 'recovery_eligible_date'])
+
+        # Chat notification
+        from chat.models import ChatMessage
+        ChatMessage.objects.create(
+            conversation=conversation,
+            sender=None,
+            content=f"Streak saved by @{request.user.username}",
+            message_type=ChatMessage.MessageType.TEXT
+        )
+
+        return Response({
+            'message': 'Seri başarıyla kurtarıldı!',
+            'streak': model.streak,
+            'streak_freezes': request.user.streak_freezes
+        })
+
+
+class GroupReserveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, conversation_id):
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        if request.user not in conversation.participants.all():
+            return Response({'error': 'Katılımcı değilsiniz.'}, status=status.HTTP_403_FORBIDDEN)
+
+        group = getattr(conversation, 'habit_group', None)
+        if group and group.adaptation_mode_active:
+            return Response({'error': 'Grup Adaptasyon Modunda, dondurucu rezerve edilemez!'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.user.streak_freezes <= 0:
+            return Response({'error': 'Yeterli dondurucunuz yok.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Reserve freeze
+        request.user.streak_freezes -= 1
+        request.user.save(update_fields=['streak_freezes'])
+
+        GroupReserve.objects.create(conversation=conversation, user=request.user)
+
+        # Chat notification
+        from chat.models import ChatMessage
+        ChatMessage.objects.create(
+            conversation=conversation,
+            sender=None,
+            content=f"@{request.user.username} rezerve dondurucu ekledi.",
+            message_type=ChatMessage.MessageType.TEXT
+        )
+
+        return Response({
+            'message': 'Dondurucu başarıyla rezerve edildi.',
+            'streak_freezes': request.user.streak_freezes
+        })
+
+    @transaction.atomic
+    def delete(self, request, conversation_id):
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        if request.user not in conversation.participants.all():
+            return Response({'error': 'Katılımcı değilsiniz.'}, status=status.HTTP_403_FORBIDDEN)
+
+        reserve = GroupReserve.objects.filter(
+            conversation=conversation,
+            user=request.user,
+            used=False,
+            can_withdraw=True
+        ).first()
+
+        if not reserve:
+            return Response({'error': 'Geri çekilebilecek aktif rezerv dondurucu bulunamadı.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Return freeze
+        request.user.streak_freezes += 1
+        request.user.save(update_fields=['streak_freezes'])
+
+        reserve.delete()
+
+        # Chat notification
+        from chat.models import ChatMessage
+        ChatMessage.objects.create(
+            conversation=conversation,
+            sender=None,
+            content=f"@{request.user.username} rezerve dondurucusunu geri çekti.",
+            message_type=ChatMessage.MessageType.TEXT
+        )
+
+        return Response({
+            'message': 'Rezerve dondurucu geri çekildi.',
+            'streak_freezes': request.user.streak_freezes
+        })
