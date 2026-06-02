@@ -1,4 +1,5 @@
 # chat/views.py
+import logging
 import json
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -333,7 +334,7 @@ class VerifyProofView(APIView):
                     friendship.update_streak()
                     friend_streak = friendship.streak
             except Exception as e:
-                print(f"Error updating friendship streak: {e}")
+                logging.getLogger(__name__).error(f"Error updating friendship streak: {e}")
 
             # SENDER: base_verify × habit_streak_mult × friend_streak_mult
             habit_streak = habit.verification_streak if habit else 0

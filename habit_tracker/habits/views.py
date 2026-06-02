@@ -1,3 +1,4 @@
+import logging
 from django.shortcuts import render
 from rest_framework import status
 from rest_framework.response import Response
@@ -76,7 +77,7 @@ class HabitListView(APIView):
                 try:
                     request.user.check_and_apply_streak_freeze()
                 except Exception as e:
-                    print(f"Error applying streak freeze: {e}")
+                    logging.getLogger(__name__).error(f"Error applying streak freeze: {e}")
             for habit in habits:
                 habit.check_and_reset_progress()
             

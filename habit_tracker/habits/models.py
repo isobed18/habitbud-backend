@@ -1,5 +1,6 @@
 # habits/models.py
 
+import logging
 from django.db import models, transaction
 from django.contrib.auth import get_user_model
 from datetime import timedelta
@@ -239,7 +240,7 @@ class Habit(models.Model):
                 from challange.services import ChallengeService
                 ChallengeService.sync_habit_completion(self.user, self)
             except Exception as e:
-                print(f"Error syncing challenge progress: {e}")
+                logging.getLogger(__name__).error(f"Error syncing challenge progress: {e}")
 
         self.save(update_fields=['streak', 'best_streak', 'completed_count', 'last_completed_date'])
 
@@ -319,7 +320,7 @@ class Habit(models.Model):
                     }
                 )
             except Exception as e:
-                print(f"Error saving history snapshot: {e}")
+                logging.getLogger(__name__).error(f"Error saving history snapshot: {e}")
 
             self.count = 0
             if self.total_time:

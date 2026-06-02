@@ -1,3 +1,4 @@
+import logging
 from django.db import transaction
 from .models import CustomUser
 
@@ -43,7 +44,7 @@ class UserService:
                         }
                     )
             except Exception as e:
-                print(f"Error sending level up notification: {e}")
+                logging.getLogger(__name__).error(f"Error sending level up notification: {e}")
             
         user.save(update_fields=['xp', 'level', 'points'])
         return user.level

@@ -1,5 +1,6 @@
 # chat/consumers.py
 import json
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
@@ -11,11 +12,12 @@ from jwt import decode as jwt_decode
 from django.conf import settings
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        print("DEBUG: ChatConsumer.connect() called")
+        logger.debug("ChatConsumer.connect() called")
         self.conversation_id = self.scope['url_route']['kwargs']['conversation_id']
         self.room_group_name = f'chat_{self.conversation_id}'
         
@@ -55,7 +57,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     return
                 
                 # Join room group
-                print(f"DEBUG: Adding channel {self.channel_name} to group {self.room_group_name}")
+                logger.debug(f"Adding channel {self.channel_name} to group {self.room_group_name}")
                 await self.channel_layer.group_add(
                     self.room_group_name,
                     self.channel_name
@@ -63,24 +65,24 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 
                 # Join User Personal Group (for system notifications)
                 self.user_group_name = f"user_{self.user.id}"
-                print(f"DEBUG: Adding channel {self.channel_name} to user group {self.user_group_name}")
+                logger.debug(f"Adding channel {self.channel_name} to user group {self.user_group_name}")
                 await self.channel_layer.group_add(
                     self.user_group_name,
                     self.channel_name
                 )
                 
-                print(f"DEBUG: WebSocket Accepted for User: {self.user.username}")
+                logger.debug(f"WebSocket Accepted for User: {self.user.username}")
                 await self.accept()
             else:
-                print("DEBUG: No user_id in token")
+                logger.debug("No user_id in token")
                 await self.close()
         except (InvalidToken, TokenError, User.DoesNotExist, Exception) as e:
-            print(f"WebSocket authentication error: {e}")
+            logger.error("WebSocket authentication error: %s", e)
             await self.close()
 
     async def disconnect(self, close_code):
         # Leave room group
-        print(f"DEBUG: Disconnecting {self.channel_name} from {self.room_group_name}")
+        logger.debug(f"Disconnecting {self.channel_name} from {self.room_group_name}")
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
@@ -94,7 +96,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
 
     async def receive(self, text_data):
-        print(f"DEBUG: WebSocket Received: {text_data}")
+        logger.debug(f"WebSocket Received: {text_data}")
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('type', 'chat_message')
         
@@ -108,7 +110,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             message_data = await self.serialize_message(message)
             
             # Send message to room group
-            print(f"DEBUG: Sending to group {self.room_group_name}: {message_data.get('id')}")
+            logger.debug(f"Sending to group {self.room_group_name}: {message_data.get('id')}")
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
@@ -130,7 +132,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         # Send message to WebSocket
-        print(f"DEBUG: Sending to WebSocket Client: {event['message'].get('id')}")
+        logger.debug(f"Sending to WebSocket Client: {event['message'].get('id')}")
         await self.send(text_data=json.dumps({
             'type': 'message',
             'message': event['message']
@@ -146,7 +148,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def typing_indicator(self, event):
         # Send typing indicator to WebSocket
-        # print(f"DEBUG: Sending typing indicator: {event['user_id']}")
+        # logger.debug(f"Sending typing indicator: {event['user_id']}")
         await self.send(text_data=json.dumps({
             'type': 'typing',
             'user_id': event['user_id'],
@@ -175,7 +177,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             )
             return message
         except Exception as e:
-            print(f"Error saving message: {e}")
+            logger.error("Error saving message: %s", e)
             return None
 
     @database_sync_to_async
