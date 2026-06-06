@@ -1,21 +1,37 @@
-# Item → Hand attachment (rigged avatars)
+# Item → Hand attachment
 
-Automatically binds a HabitBud item GLB to a **rigged** avatar's hand bone so the
-item follows the hand in every pose/animation, then exports one combined GLB.
+Automatically drops a HabitBud item GLB into an avatar's hand and exports one
+combined GLB. Two modes — **socket** (recommended) and **bone**.
 
 > Only the **hand** is supported for now — head attachment distorts the mesh.
 
-## Quick start (Windows)
+## Socket mode (recommended) ⭐
+In Blender, add an **Empty** at the hand, name it with `soket`/`socket`
+(e.g. `sagel_soket` = right hand), parent it to the body, and size the empty to
+hint the item scale. That's all the prep needed — no skeleton.
+
 ```powershell
-# one item (defaults: right hand, fox avatar, out in D:\blenderprojects\out)
-tools\rig\attach.ps1 -Item magic_wand
+# one item (defaults: pinkcat socket avatar, out in D:\blenderprojects\out)
+tools\rig\attach.ps1 -Socket -Item magic_wand
 
-# left hand
-tools\rig\attach.ps1 -Item coffee_mug -Hand L
+# all socket items in item_attach.json
+tools\rig\attach.ps1 -Socket -All
 
-# every hand item listed in item_attach.json
+# your own socket GLB
+tools\rig\attach.ps1 -Socket -Item dumbell -Avatar D:\blenderprojects\mycat.glb
+```
+The item is auto-scaled to `socket_size * fit_ratio * scale`, parented to the
+socket (inherits its position + rotation), and stray meshes/empties are dropped.
+
+## Bone mode (rigged skeletons)
+For fully rigged avatars (FBX with an armature): binds the item to the hand bone
+so it follows animation.
+```powershell
+tools\rig\attach.ps1 -Item magic_wand          # fox skeleton, right hand
+tools\rig\attach.ps1 -Item coffee_mug -Hand L  # left hand
 tools\rig\attach.ps1 -All
 ```
+
 `-Item` takes a name (looked up in `habit_tracker\media\models\items\<name>.glb`)
 or a full path. Override `-Avatar`, `-Out`, `-OutDir`, `-Blender` as needed.
 

@@ -1,4 +1,4 @@
-"""attach_item - bind a HabitBud item GLB to a rigged avatar's hand bone (Blender).
+r"""attach_item - bind a HabitBud item GLB to a rigged avatar's hand bone (Blender).
 
 Runs headless inside Blender:
     blender --background --python attach_item.py -- \

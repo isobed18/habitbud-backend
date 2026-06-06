@@ -7,5 +7,14 @@
   "coffee_mug":    { "fit": 0.28, "rot_deg": [0, 0, 0],   "loc": [0, 0.03, 0] },
   "water_bottle":  { "fit": 0.40, "rot_deg": [0, 0, 0],   "loc": [0, 0.04, 0] },
   "book":          { "fit": 0.40, "rot_deg": [0, 0, 0],   "loc": [0, 0.03, 0] },
-  "balloons":      { "fit": 0.70, "rot_deg": [0, 0, 0],   "loc": [0, 0.30, 0] }
+  "balloons":      { "fit": 0.70, "rot_deg": [0, 0, 0],   "loc": [0, 0.30, 0] },
+
+  "_socket_default": { "fit_ratio": 1.6, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
+  "socket": {
+    "magic_wand":   { "fit_ratio": 2.2, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.10] },
+    "coffee_mug":   { "fit_ratio": 1.3, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
+    "dumbell":      { "fit_ratio": 1.6, "rot_deg": [0, 0, 90], "loc": [0, 0, 0] },
+    "water_bottle": { "fit_ratio": 1.8, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.05] },
+    "book":         { "fit_ratio": 1.7, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] }
+  }
 }

@@ -9,18 +9,26 @@
 param(
     [string]   $Item,
     [switch]   $All,
+    [switch]   $Socket,                                          # use a socket-empty avatar instead of a skeleton
     [string]   $Hand = 'R',
-    [string]   $Avatar = 'D:\blenderprojects\foxrigged.fbx',
+    [string]   $Avatar,                                          # defaults per mode below
     [string]   $Out,
     [string]   $OutDir = 'D:\blenderprojects\out',
     [string]   $Blender = 'D:\Blender Foundation\Blender 5.1\blender.exe'
 )
 $ErrorActionPreference = 'Stop'
-$repo    = Split-Path (Split-Path $PSScriptRoot -Parent) -Leaf  # unused, clarity
 $root    = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$script  = Join-Path $PSScriptRoot 'attach_item.py'
 $config  = Join-Path $PSScriptRoot 'item_attach.json'
 $itemDir = Join-Path $root 'habit_tracker\media\models\items'
+if ($Socket) {
+    $script = Join-Path $PSScriptRoot 'attach_socket.py'
+    if (-not $Avatar) { $Avatar = 'D:\blenderprojects\sagelsoket_pinkcat.glb' }
+    $prefix = 'pinkcat'
+} else {
+    $script = Join-Path $PSScriptRoot 'attach_item.py'
+    if (-not $Avatar) { $Avatar = 'D:\blenderprojects\foxrigged.fbx' }
+    $prefix = 'fox'
+}
 
 function Resolve-Item([string]$name) {
     if (Test-Path $name) { return (Resolve-Path $name).Path }
@@ -31,25 +39,31 @@ function Resolve-Item([string]$name) {
 
 function Attach([string]$itemPath, [string]$outPath) {
     Write-Host "==> $([System.IO.Path]::GetFileNameWithoutExtension($itemPath)) -> $outPath" -ForegroundColor Cyan
-    & $Blender --background --python $script -- `
-        --avatar $Avatar --item $itemPath --out $outPath --hand $Hand --config $config
+    if ($Socket) {
+        & $Blender --background --python $script -- `
+            --avatar $Avatar --item $itemPath --out $outPath --config $config
+    } else {
+        & $Blender --background --python $script -- `
+            --avatar $Avatar --item $itemPath --out $outPath --hand $Hand --config $config
+    }
     if ($LASTEXITCODE -ne 0) { throw "attach failed for $itemPath" }
 }
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 if ($All) {
-    $names = (Get-Content $config -Raw | ConvertFrom-Json).PSObject.Properties.Name |
-             Where-Object { $_ -notlike '_*' }
+    $json = Get-Content $config -Raw | ConvertFrom-Json
+    if ($Socket) { $names = $json.socket.PSObject.Properties.Name }
+    else         { $names = $json.PSObject.Properties.Name | Where-Object { $_ -notlike '_*' -and $_ -ne 'socket' } }
     foreach ($n in $names) {
         $ip = Join-Path $itemDir ($n + '.glb')
-        if (Test-Path $ip) { Attach $ip (Join-Path $OutDir "fox_$n.glb") }
+        if (Test-Path $ip) { Attach $ip (Join-Path $OutDir "${prefix}_$n.glb") }
         else { Write-Host "skip $n (no GLB)" -ForegroundColor DarkYellow }
     }
 } else {
     if (-not $Item) { throw 'provide -Item <name> or -All' }
     $ip = Resolve-Item $Item
-    if (-not $Out) { $Out = Join-Path $OutDir ("fox_" + [System.IO.Path]::GetFileNameWithoutExtension($ip) + '.glb') }
+    if (-not $Out) { $Out = Join-Path $OutDir ("${prefix}_" + [System.IO.Path]::GetFileNameWithoutExtension($ip) + '.glb') }
     Attach $ip $Out
 }
 Write-Host "done. GLBs in $OutDir" -ForegroundColor Green
