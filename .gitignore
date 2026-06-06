@@ -25,6 +25,7 @@ db.sqlite3
 # Rig tooling: ignore the bulky symlinked content on D:, but keep our scripts.
 tools/rig/*
 !tools/rig/attach_item.py
+!tools/rig/attach_socket.py
 !tools/rig/attach.ps1
 !tools/rig/item_attach.json
 !tools/rig/README.md
