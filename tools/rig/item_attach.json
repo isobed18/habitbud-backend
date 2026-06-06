@@ -1,0 +1,11 @@
+{
+  "_comment": "Per-item hand-attachment tuning. loc/rot_deg/scale are relative to the hand-bone tail (Y axis runs along the bone). fit = target max dimension (Blender units) before the scale multiplier. Tweak numbers and re-run attach_item.py; no Blender clicking needed.",
+  "_default":      { "fit": 0.35, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
+
+  "magic_wand":    { "fit": 0.45, "rot_deg": [90, 0, 0],  "loc": [0, 0.05, 0] },
+  "dumbell":       { "fit": 0.40, "rot_deg": [0, 90, 0],  "loc": [0, 0.02, 0] },
+  "coffee_mug":    { "fit": 0.28, "rot_deg": [0, 0, 0],   "loc": [0, 0.03, 0] },
+  "water_bottle":  { "fit": 0.40, "rot_deg": [0, 0, 0],   "loc": [0, 0.04, 0] },
+  "book":          { "fit": 0.40, "rot_deg": [0, 0, 0],   "loc": [0, 0.03, 0] },
+  "balloons":      { "fit": 0.70, "rot_deg": [0, 0, 0],   "loc": [0, 0.30, 0] }
+}

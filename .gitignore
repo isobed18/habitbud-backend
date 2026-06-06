@@ -22,8 +22,12 @@ db.sqlite3
 /habit_tracker/assets/
 /habit_tracker/output.txt
 
-# Rig tooling (symlinked to D: drive — do not commit)
-tools/rig/
+# Rig tooling: ignore the bulky symlinked content on D:, but keep our scripts.
+tools/rig/*
+!tools/rig/attach_item.py
+!tools/rig/attach.ps1
+!tools/rig/item_attach.json
+!tools/rig/README.md
 tools/hunyuan/__pycache__/
 tools/hunyuan/temp_input/
 tools/hunyuan/*.log
