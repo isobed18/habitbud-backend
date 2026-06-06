@@ -1,28 +1,40 @@
-"""Batch image->3D generation for HabitBud (no rembg/onnxruntime needed).
+"""Batch image -> 3D generation for HabitBud (Hunyuan3D-2).
 
-Run from inside a cloned Hunyuan3D-2 repo (so `hy3dgen` imports). Background is
-removed with a PIL corner flood-fill (the Gemini plush images have a plain,
-edge-touching background) -> RGBA, so the pipeline skips its own rembg path.
+Run from inside a cloned Hunyuan3D-2 repo (so `hy3dgen` imports). The plain
+Gemini background is removed with a PIL corner flood-fill -> RGBA, so the
+pipeline skips its own rembg path (no onnxruntime needed).
 
-Examples:
-    # all images in a folder -> ./out/<name>.glb  (shape only, ~6 GB VRAM)
-    python generate.py --input <path>/animals_gemini_2d --out ./out
+Examples
+--------
+    # shape only, ~40k faces, fast (~6 GB VRAM)
+    python generate.py --input <imgs> --out ./out
 
-    # with texture (~16 GB; needs the texgen custom rasterizer built)
-    python generate.py --input <path> --out ./out --texture
+    # textured + capped at 30k faces (recommended for app/rig)
+    python generate.py --input <imgs> --out ./out --texture --faces 30000
 
-Tip: put the model cache on a big drive:  set HF_HOME=D:\hf_cache
+    # raw high detail (huge, ~500k faces) -> only if you'll decimate later
+    python generate.py --input <imgs> --out ./out --octree 384 --faces 0
+
+Options
+-------
+  --octree N    marching-cubes resolution; higher = more detail + more faces
+                (256 fast / 320 detailed / 384 max). Default 256.
+  --faces  N    cap final triangle count via quadric decimation (FaceReducer).
+                0 disables reduction. Default 40000. Lower = smaller GLB.
+  --texture     also bake a color texture (needs the texgen custom rasterizer).
+  --steps  N    diffusion steps (quality vs speed). Default 30.
+
+Tip: put the model cache on a big drive:  set HF_HOME=D:\\hf_cache
 """
 import argparse
 import glob
 import os
-import sys
 import time
 
-# Force Hugging Face to use the D: drive cache folder (Windows C: drive has very low space)
-os.environ['HF_HOME'] = 'D:\\hf_cache'
-os.environ['HF_HUB_CACHE'] = 'D:\\hf_cache\\hub'
-os.environ['HF_XET_CACHE'] = 'D:\\hf_cache\\xet'
+# Keep the multi-GB model cache off a full C: drive.
+os.environ.setdefault('HF_HOME', 'D:\\hf_cache')
+os.environ.setdefault('HF_HUB_CACHE', 'D:\\hf_cache\\hub')
+os.environ.setdefault('HF_XET_CACHE', 'D:\\hf_cache\\xet')
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -55,10 +67,23 @@ def bg_to_alpha(path):
     return canvas
 
 
+def clean_mesh(mesh, max_faces):
+    """Remove floaters/degenerate faces and decimate to `max_faces` triangles.
+    Run BEFORE texturing so the texture is baked onto the light mesh."""
+    try:
+        from hy3dgen.shapegen import FloaterRemover, DegenerateFaceRemover, FaceReducer
+        mesh = FloaterRemover()(mesh)
+        mesh = DegenerateFaceRemover()(mesh)
+        if max_faces and max_faces > 0:
+            mesh = FaceReducer()(mesh, max_facenum=max_faces)
+    except Exception as e:
+        print("  clean_mesh warn:", e)
+    return mesh
+
+
 def matte_export(mesh, out_path):
-    """Hunyuan exports materials as metallic=1 with no vertex normals, which look
-    dark in any PBR viewer (Three.js, Unity, Blender preview). Force matte plush
-    materials and ensure normals so the baked colors read correctly everywhere."""
+    """Hunyuan exports materials metallic=1 with no normals -> dark in PBR
+    viewers. Force matte, downscale the texture, ensure normals."""
     try:
         mat = getattr(mesh.visual, 'material', None)
         if mat is not None:
@@ -66,58 +91,49 @@ def matte_export(mesh, out_path):
                 mat.metallicFactor = 0.0
             if hasattr(mat, 'roughnessFactor'):
                 mat.roughnessFactor = 0.9
-            # Downscale the base-color texture for lighter mobile GLBs.
             tex = getattr(mat, 'baseColorTexture', None)
-            if tex is not None and hasattr(tex, 'size') and max(tex.size) > 512:
-                from PIL import Image as _Img
-                mat.baseColorTexture = tex.convert('RGB').resize((512, 512), _Img.LANCZOS)
+            if tex is not None and hasattr(tex, 'size') and max(tex.size) > 1024:
+                mat.baseColorTexture = tex.convert('RGB').resize((1024, 1024), Image.LANCZOS)
     except Exception:
         pass
     try:
-        _ = mesh.vertex_normals  # triggers computation so they get exported
+        _ = mesh.vertex_normals
     except Exception:
         pass
     mesh.export(out_path)
 
 
-def worker_main(queue, out_dir, steps, octree, texture, worker_id):
+def generate_one(shape, paint, path, out_dir, steps, octree, faces, tag=''):
     import torch
-    from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+    name = os.path.splitext(os.path.basename(path))[0].replace(' ', '_').lower()
+    out_path = os.path.join(out_dir, f"{name}.glb")
+    print(f"\n{tag}=== {name} ===")
+    t = time.time()
+    img = bg_to_alpha(path)
+    mesh = shape(image=img, num_inference_steps=steps, octree_resolution=octree,
+                 num_chunks=20000, generator=torch.manual_seed(42), output_type='trimesh')[0]
+    mesh = clean_mesh(mesh, faces)
+    try:
+        print(f"{tag}  faces after reduce: {len(mesh.faces)}")
+    except Exception:
+        pass
+    if paint is not None:
+        mesh = paint(mesh, image=img)
+    matte_export(mesh, out_path)
+    print(f"{tag}  -> {out_path}  ({time.time() - t:.1f}s)")
 
-    print(f"[Worker {worker_id}] Loading shape model tencent/Hunyuan3D-2mini ...")
+
+def load_pipelines(texture):
+    from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+    print("loading shape model tencent/Hunyuan3D-2mini ...")
     shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
-        'tencent/Hunyuan3D-2mini', subfolder='hunyuan3d-dit-v2-mini', variant='fp16'
-    )
+        'tencent/Hunyuan3D-2mini', subfolder='hunyuan3d-dit-v2-mini', variant='fp16')
     paint = None
     if texture:
-        print(f"[Worker {worker_id}] Loading paint model tencent/Hunyuan3D-2 ...")
+        print("loading paint model tencent/Hunyuan3D-2 ...")
         from hy3dgen.texgen import Hunyuan3DPaintPipeline
         paint = Hunyuan3DPaintPipeline.from_pretrained('tencent/Hunyuan3D-2')
-
-    print(f"[Worker {worker_id}] Loaded successfully. Processing images...")
-
-    while True:
-        try:
-            path = queue.get_nowait()
-        except Exception:
-            break
-
-        name = os.path.splitext(os.path.basename(path))[0].replace(' ', '_').lower()
-        out_path = os.path.join(out_dir, f"{name}.glb")
-        print(f"\n[Worker {worker_id}] === Starting {name} ===")
-        try:
-            img = bg_to_alpha(path)
-            t = time.time()
-            mesh = shape(image=img, num_inference_steps=steps, octree_resolution=octree,
-                         num_chunks=20000, generator=torch.manual_seed(42), output_type='trimesh')[0]
-            if paint is not None:
-                mesh = paint(mesh, image=img)
-            matte_export(mesh, out_path)
-            print(f"[Worker {worker_id}]   -> {out_path}  ({time.time() - t:.1f}s)")
-        except Exception as exc:
-            print(f"[Worker {worker_id}]   FAILED {name}: {exc}")
-
-    print(f"[Worker {worker_id}] Worker finished.")
+    return shape, paint
 
 
 def main():
@@ -126,12 +142,11 @@ def main():
     ap.add_argument('--out', default='./out', help="Output folder for GLBs")
     ap.add_argument('--steps', type=int, default=30)
     ap.add_argument('--octree', type=int, default=256)
+    ap.add_argument('--faces', type=int, default=40000, help="Cap triangle count (0 = no reduction)")
     ap.add_argument('--texture', action='store_true', help="Also synthesize texture")
-    ap.add_argument('--workers', type=int, default=None, help="Number of parallel worker processes (default: 2 for shape-only, 1 for texture)")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
-
     images = []
     for ext in ('*.png', '*.jpg', '*.jpeg', '*.webp'):
         images.extend(glob.glob(os.path.join(args.input, ext)))
@@ -140,61 +155,13 @@ def main():
         print(f"No images in {args.input}")
         return
 
-    workers_count = args.workers
-    if workers_count is None:
-        workers_count = 1 if args.texture else 2
-
-    if workers_count > 1:
-        print(f"Starting {workers_count} parallel worker processes...")
-        import multiprocessing
-        ctx = multiprocessing.get_context('spawn')
-        queue = ctx.Queue()
-        for path in images:
-            queue.put(path)
-
-        processes = []
-        for i in range(workers_count):
-            p = ctx.Process(
-                target=worker_main,
-                args=(queue, args.out, args.steps, args.octree, args.texture, i)
-            )
-            p.start()
-            processes.append(p)
-
-        for p in processes:
-            p.join()
-        print(f"\nDone. GLBs in {os.path.abspath(args.out)}")
-    else:
-        # Fallback to single-process generation to avoid multiprocessing overhead and print output directly
-        import torch
-        from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
-
-        print("loading shape model tencent/Hunyuan3D-2mini ...")
-        shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
-            'tencent/Hunyuan3D-2mini', subfolder='hunyuan3d-dit-v2-mini', variant='fp16'
-        )
-        paint = None
-        if args.texture:
-            from hy3dgen.texgen import Hunyuan3DPaintPipeline
-            paint = Hunyuan3DPaintPipeline.from_pretrained('tencent/Hunyuan3D-2')
-
-        for path in images:
-            name = os.path.splitext(os.path.basename(path))[0].replace(' ', '_').lower()
-            out_path = os.path.join(args.out, f"{name}.glb")
-            print(f"\n=== {name} ===")
-            try:
-                img = bg_to_alpha(path)
-                t = time.time()
-                mesh = shape(image=img, num_inference_steps=args.steps, octree_resolution=args.octree,
-                             num_chunks=20000, generator=torch.manual_seed(42), output_type='trimesh')[0]
-                if paint is not None:
-                    mesh = paint(mesh, image=img)
-                matte_export(mesh, out_path)
-                print(f"  -> {out_path}  ({time.time() - t:.1f}s)")
-            except Exception as exc:
-                print(f"  FAILED {name}: {exc}")
-
-        print(f"\nDone. GLBs in {os.path.abspath(args.out)}")
+    shape, paint = load_pipelines(args.texture)
+    for path in images:
+        try:
+            generate_one(shape, paint, path, args.out, args.steps, args.octree, args.faces)
+        except Exception as exc:
+            print(f"  FAILED {os.path.basename(path)}: {exc}")
+    print(f"\nDone. GLBs in {os.path.abspath(args.out)}")
 
 
 if __name__ == '__main__':

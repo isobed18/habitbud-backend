@@ -1,74 +1,135 @@
-# Hunyuan3D → HabitBud avatar pipeline
+# HabitBud — 3D Model Creation (Hunyuan3D-2)
 
-Turn the 2D plush-animal images (`habit_tracker/assets/animals_gemini_2d/`) into
-textured 3D GLB characters with Hunyuan3D-2, then import them into the app's
-Avatar Studio (3D mode).
+This is the team guide for turning a 2D character image into a 3D `.glb` model
+for the app (avatars, dress-up items). It is **offline tooling** — it does not
+run in the backend server; you run it on the GPU machine and drop the resulting
+GLBs into the app.
 
-**Why image→3D:** Hunyuan3D-2's strongest path is a single clean image of one
-centered subject on a plain background — exactly what the Gemini images are.
-`generate.py` runs background removal (which also drops the corner watermark),
-tight-crops to the subject, then generates shape + texture.
-
-**VRAM:** shape ≈ 6 GB, shape+texture ≈ 16 GB → an RTX 3090 (24 GB) is plenty.
-Use the `2mini` model for faster iteration.
+> TL;DR
+> ```powershell
+> # 1) put a clean, front-facing PNG in habit_tracker/assets/t-poses/
+> # 2) run the wrapper (textured, ~30k faces):
+> powershell -ExecutionPolicy Bypass -File tools\hunyuan\make_model.ps1 -Input habit_tracker\assets\t-poses -Texture -Faces 30000
+> # 3) GLBs appear in D:\Hunyuan3D-2\out_tpose\
+> ```
 
 ---
 
-## 1. Set up Hunyuan3D-2 (on the 3090 box)
+## 1. What it does
 
+`generate.py` takes each image in a folder and produces a textured 3D mesh:
+
+1. **Background removal** — a PIL corner flood-fill turns the plain background
+   transparent (works for the Gemini plush renders; no rembg/onnxruntime).
+2. **Shape generation** — Hunyuan3D-2mini (image → 3D mesh).
+3. **Clean-up** — remove floating bits + degenerate faces, then **decimate** to a
+   target triangle count (this is the size fix — see §4).
+4. **Texture** (optional) — Hunyuan3D-2 paint pipeline bakes a color texture.
+5. **Export** — matte material (metalness 0) + normals + GLB.
+
+**Input tips:** one centered character, plain background, front-facing. For
+rigging, use a **T-pose** (arms/legs spread) so the skeleton fits cleanly.
+
+---
+
+## 2. Environment (already set up on this machine)
+
+| Thing | Location |
+|---|---|
+| Hunyuan3D-2 repo | `D:\Hunyuan3D-2` (symlinked into `tools/rig/Hunyuan3D-2`) |
+| Python | conda **base** → `C:\Users\ishak\anaconda3\python.exe` (torch + CUDA) |
+| Model cache | `D:\hf_cache` (set via `HF_HOME`; keep off the full C: drive) |
+| Texture C++ ext | `custom_rasterizer`, `mesh_processor` (editable installs in base) |
+
+**Fresh-machine setup** (only if recreating):
 ```bash
-git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2
-cd Hunyuan3D-2
-
-# (recommended) fresh env, CUDA-enabled torch matching your driver
-conda create -n hy3d python=3.10 -y && conda activate hy3d
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install -r requirements.txt
-pip install -e .
-
-# texture pipeline native bits (needed only if you want textures):
-cd hy3dgen/texgen/custom_rasterizer && pip install -e . && cd ../../..
-cd hy3dgen/texgen/differentiable_renderer && pip install -e . && cd ../../..
-
-# preprocessing helpers
-pip install rembg pillow trimesh
+conda activate base                       # needs CUDA-enabled torch
+pip install diffusers transformers accelerate trimesh pymeshlab pygltflib \
+            scikit-image omegaconf einops opencv-python
+# texture extensions (need MSVC + CUDA toolkit):
+cd D:\Hunyuan3D-2\hy3dgen\texgen\custom_rasterizer       && pip install -e .
+cd D:\Hunyuan3D-2\hy3dgen\texgen\differentiable_renderer && pip install -e .
 ```
 
-Models download automatically from Hugging Face on first run
-(`tencent/Hunyuan3D-2` or `tencent/Hunyuan3D-2mini`). Accept the model card terms
-on HF and `huggingface-cli login` if prompted.
+> ⚠️ If you ever **move** the repo, the editable installs above break (their
+> recorded path is stale → `ModuleNotFoundError: custom_rasterizer`). Fix the
+> path inside `…\site-packages\__editable__.custom_rasterizer-*.pth` and
+> `__editable___mesh_processor_*_finder.py`, or just re-run `pip install -e .`.
 
-## 2. Generate the GLBs
+---
 
-Copy `generate.py` (next to this README) into the cloned `Hunyuan3D-2/` folder so
-it can import `hy3dgen`, then:
+## 3. How to run
 
-```bash
-# fast, no texture (6 GB):
-python generate.py --input /path/to/habitbud-backend/habit_tracker/assets/animals_gemini_2d --out ./out --mini --no-texture
-
-# full quality with texture (16 GB):
-python generate.py --input /path/to/.../animals_gemini_2d --out ./out
+**Wrapper (recommended):**
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\hunyuan\make_model.ps1 `
+  -Input habit_tracker\assets\t-poses -Texture -Faces 30000 -Octree 320
 ```
 
-Output: `./out/fox.glb`, `./out/cat.glb`, … one per input image.
-
-## 3. Import into HabitBud
-
-```bash
-cd /path/to/habitbud-backend/habit_tracker
-python manage.py import_avatar_models --dir /path/to/Hunyuan3D-2/out --scale 1.0
+**Or call generate.py directly** (from inside `D:\Hunyuan3D-2`):
+```powershell
+& "C:\Users\ishak\anaconda3\python.exe" generate.py `
+  --input "<folder of images>" --out "D:\Hunyuan3D-2\out_tpose" `
+  --texture --faces 30000 --octree 320 --steps 50
 ```
 
-This copies the GLBs into `media/models/avatars/` and registers them as
-`AvatarModel` rows. They immediately appear in the app: **Profil → avatar → 3B**.
-(`--scale` is a render-size hint for the RN viewer; tweak per model if needed.)
+It processes every image in the folder and writes `<name>.glb`.
 
-## Notes / tuning
+---
 
-- If a character imports too big/small in the app, set its `scale` in Django
-  admin (Users → Avatar models) — no re-generation needed.
-- `--steps` controls quality vs speed (default 30; 50 = crisper, slower).
-- Licensing: Tencent Hunyuan 3D 2.0 license — commercial OK under 1M MAU, but the
-  license does **not** apply in EU/UK/South Korea. Generate & use within the
-  permitted territory.
+## 4. Options (the "too many faces / too big" fix)
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--faces N` | `40000` | **Cap triangle count** via quadric decimation. This is what keeps GLBs small. `0` = no reduction (raw, can be 500k+ faces / 25 MB+). Good values: 15k–40k. |
+| `--octree N` | `256` | Marching-cubes resolution. Higher = more surface detail **and** more faces (256 fast · 320 detailed · 384 max). |
+| `--steps N` | `30` | Diffusion steps; more = crisper shape, slower. |
+| `--texture` | off | Bake a color texture (else plain gray mesh, ~6 GB VRAM vs ~16 GB). |
+
+**Size cheat-sheet** (fox example): raw octree 320 ≈ **570k faces / 25 MB**;
+with `--faces 30000` ≈ **30k faces / ~2–4 MB** — same look, app-friendly.
+The texture is also downscaled to 1024px on export.
+
+---
+
+## 5. What else Hunyuan3D-2 can do (beyond face count)
+
+The repo ships several pipelines (see `D:\Hunyuan3D-2\examples\`):
+
+- **Image → 3D** — what we use (`Hunyuan3D-2mini`, 0.6B; or `Hunyuan3D-2`, 1.1B for higher quality).
+- **Multiview → 3D** (`Hunyuan3D-2mv`) — feed **front + back + side** images for
+  much better geometry (great for asymmetric characters / accessories).
+- **Text → 3D** — `text2image` (Hunyuan-DiT) makes an image from a prompt, then
+  image→3D. Lets us generate items from text without drawing them.
+- **Texture-only** — run just the paint pipeline to (re)texture an existing mesh
+  (e.g. after manual edits/rigging in Blender).
+- **FlashVDM fast variants** (`examples/fast_*`, `mini-turbo`) — faster shape gen.
+- **Post-processors** — `FaceReducer` (decimate), `FloaterRemover`,
+  `DegenerateFaceRemover`, `MeshSimplifier` (we apply the first three).
+- **Shape knobs** — `guidance_scale`, `num_chunks`, `mc_level`, `mc_algo`
+  (`mc` = scikit-image marching cubes, default; `dmc` = differentiable, needs `diso`).
+
+Ideas this unlocks for us: text-prompted dress-up items, multiview hero avatars,
+re-texturing after rigging, batch item packs.
+
+---
+
+## 6. After generation: rigging & app import
+
+- **Rig (T-pose models):** open the GLB in **Blender**, or use **RigAnything**
+  (`D:\RigAnything`, env `D:\conda_envs\UniRig`) which auto-rigs + simplifies:
+  `sh scripts/inference.sh <mesh.glb> 1 8192`.
+- **Avatars → app:** `python manage.py import_avatar_models --dir <glb folder> --thumbs-dir <2d source>`
+- **Items → app:** `python manage.py import_items --dir <glb folder> --thumbs-dir <2d source> --assign-to <user>`
+
+---
+
+## 7. Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `ModuleNotFoundError: custom_rasterizer` | Editable path stale after moving repo — fix the `__editable__*` files in base `site-packages` (§2 warning). |
+| `DLL load failed … custom_rasterizer_kernel` | `import torch` first (generate.py already does). |
+| `not enough space on disk` | Model cache must be on D: — `set HF_HOME=D:\hf_cache`. |
+| Model renders dark | metalness=1 from Hunyuan; `matte_export` sets it to 0 (app also forces matte). |
+| Can't rig (limbs merged) | Use a **T-pose** input image. |
