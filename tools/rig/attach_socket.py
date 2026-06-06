@@ -60,13 +60,14 @@ def import_glb(path):
 def find_socket(objs, name):
     if name:
         s = bpy.data.objects.get(name)
-        if s:
+        if s and s.type == 'EMPTY':
             return s
-        raise SystemExit(f'socket "{name}" not found')
+        print(f'  (socket "{name}" not found, falling back to auto-detect)')
     for o in objs:
         if o.type == 'EMPTY' and ('soket' in o.name.lower() or 'socket' in o.name.lower()):
             return o
-    raise SystemExit('no socket empty found (name should contain "soket"/"socket")')
+    raise SystemExit(f'no socket empty found (expected an Empty named "{name or "socket_r"}" '
+                     'or one containing "socket"/"soket")')
 
 
 def consolidate_item(item_objs):

@@ -10,6 +10,7 @@
   "balloons":      { "fit": 0.70, "rot_deg": [0, 0, 0],   "loc": [0, 0.30, 0] },
 
   "_socket_default": { "fit_ratio": 1.6, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
+  "hand_items": ["magic_wand", "dumbell", "coffee_mug", "water_bottle", "book", "balloons"],
   "socket": {
     "magic_wand":   { "fit_ratio": 2.2, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.10] },
     "coffee_mug":   { "fit_ratio": 1.3, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },

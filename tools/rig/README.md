@@ -6,22 +6,41 @@ combined GLB. Two modes — **socket** (recommended) and **bone**.
 > Only the **hand** is supported for now — head attachment distorts the mesh.
 
 ## Socket mode (recommended) ⭐
-In Blender, add an **Empty** at the hand, name it with `soket`/`socket`
-(e.g. `sagel_soket` = right hand), parent it to the body, and size the empty to
-hint the item scale. That's all the prep needed — no skeleton.
 
+### The socket (what YOU do in Blender, once per avatar)
+Add an **Empty** at the right hand:
+- **Name it exactly `socket_r`** (this is the default the scripts look for).
+  Any name containing `socket`/`soket` also works as a fallback.
+- Parent it to the body, place it at the right hand.
+- **Size the Empty** (its display size) — this is the reference for item scale.
+- Export the avatar as `.glb`.
+
+You only ever define the **right hand**. All hand items attach automatically.
+
+### Attach everything (batch) — the main workflow
+Drop your socketed avatars in one folder and the item GLBs in another, then:
 ```powershell
-# one item (defaults: pinkcat socket avatar, out in D:\blenderprojects\out)
-tools\rig\attach.ps1 -Socket -Item magic_wand
-
-# all socket items in item_attach.json
-tools\rig\attach.ps1 -Socket -All
-
-# your own socket GLB
-tools\rig\attach.ps1 -Socket -Item dumbell -Avatar D:\blenderprojects\mycat.glb
+tools\rig\attach_all.ps1 `
+  -AvatarsDir D:\blenderprojects\gen\avatars_socketed `
+  -ItemsDir   D:\blenderprojects\gen\items `
+  -OutDir     D:\blenderprojects\gen\out
 ```
-The item is auto-scaled to `socket_size * fit_ratio * scale`, parented to the
-socket (inherits its position + rotation), and stray meshes/empties are dropped.
+This produces `<avatar>__<item>.glb` for **every avatar × every hand item**
+(`magic_wand, dumbell, coffee_mug, water_bottle, book, balloons` — the
+`hand_items` list in `item_attach.json`). Options:
+```powershell
+-Socket socket_r              # socket Empty name (default socket_r)
+-Items magic_wand,coffee_mug  # only these items
+```
+
+### Attach one (quick test)
+```powershell
+tools\rig\attach.ps1 -Socket -Item magic_wand                       # default avatar
+tools\rig\attach.ps1 -Socket -Item dumbell -Avatar D:\...\mycat.glb # your GLB
+tools\rig\attach.ps1 -Socket -All                                   # all socket items, one avatar
+```
+Each item is auto-scaled to `socket_size * fit_ratio * scale`, parented to the
+socket (inherits its position + rotation); stray meshes/empties are dropped.
 
 ## Bone mode (rigged skeletons)
 For fully rigged avatars (FBX with an armature): binds the item to the hand bone
