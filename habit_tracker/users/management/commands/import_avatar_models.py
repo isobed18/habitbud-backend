@@ -34,8 +34,11 @@ NAME_TR = {
 
 
 def _base_key(name):
-    """fox2 / bear_(2) / pinkcat2 -> 'fox' / 'bear' / 'pinkcat' (alpha only)."""
-    return re.sub(r'[^a-z]', '', name.lower())
+    """fox2 / bear_(2) / fox_socketed -> 'fox' / 'bear' / 'fox' (alpha only, minus rig suffixes)."""
+    s = re.sub(r'[^a-z]', '', name.lower())
+    for suffix in ('socketed', 'tpose', 'rigged'):
+        s = s.replace(suffix, '')
+    return s
 
 
 def _face_crop_bytes(path):
@@ -65,6 +68,9 @@ class Command(BaseCommand):
         parser.add_argument('--thumbs-dir', default=None,
                             help="Folder of 2D source images to use as face snapshots "
                                  "(matched by base filename). E.g. the Gemini PNGs.")
+        parser.add_argument('--replace', action='store_true',
+                            help="Deactivate (is_active=False) any AvatarModel whose slug "
+                                 "was not in this import batch — retires old high-poly models.")
 
     def handle(self, *args, **options):
         folder = os.path.abspath(options['dir'])
@@ -84,9 +90,10 @@ class Command(BaseCommand):
             for tf in os.listdir(tdir):
                 tb, te = os.path.splitext(tf)
                 if te.lower() in ('.png', '.jpg', '.jpeg', '.webp'):
-                    thumbs[tb.replace(' ', '_').lower()] = os.path.join(tdir, tf)
+                    thumbs[_base_key(tb)] = os.path.join(tdir, tf)  # 'fox2'/'bear (2)' -> 'fox'/'bear'
 
         created, updated = 0, 0
+        imported_slugs = []
         for order, fname in enumerate(sorted(glbs)):
             name = os.path.splitext(fname)[0]
             slug = slugify(name)
@@ -106,7 +113,7 @@ class Command(BaseCommand):
             with open(os.path.join(folder, fname), 'rb') as fh:
                 obj.glb.save(fname, File(fh), save=True)
             # Attach the matching 2D source image as a face snapshot/thumbnail.
-            tpath = thumbs.get(name.replace(' ', '_').lower())
+            tpath = thumbs.get(base)
             if tpath:
                 try:
                     buf = _face_crop_bytes(tpath)
@@ -114,6 +121,7 @@ class Command(BaseCommand):
                 except Exception:
                     with open(tpath, 'rb') as th:  # fallback: full image
                         obj.thumbnail.save(os.path.basename(tpath), File(th), save=True)
+            imported_slugs.append(slug)
             created += was_created
             updated += not was_created
             try:
@@ -124,3 +132,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"Imported {len(glbs)} GLB(s): {created} new, {updated} updated."
         ))
+
+        if options.get('replace'):
+            stale = AvatarModel.objects.exclude(slug__in=imported_slugs).filter(is_active=True)
+            n = stale.update(is_active=False)
+            self.stdout.write(self.style.WARNING(f"Deactivated {n} stale avatar(s) not in this batch."))

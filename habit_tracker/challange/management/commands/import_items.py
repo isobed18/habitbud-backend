@@ -82,10 +82,11 @@ class Command(BaseCommand):
             obj, was_new = Item.objects.get_or_create(
                 name=name,
                 defaults={'description': f'{name} aksesuarı', 'rarity': 'rare',
-                          'anchor': anchor, 'item_scale': scale},
+                          'anchor': anchor, 'item_scale': scale, 'slug': base},
             )
             obj.anchor = anchor
             obj.item_scale = scale
+            obj.slug = base
             with open(os.path.join(folder, fname), 'rb') as fh:
                 obj.model_glb.save(fname, File(fh), save=True)
             tpath = thumbs.get(base)

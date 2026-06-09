@@ -13,6 +13,9 @@ class Item(models.Model):
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
+    # Stable English base key (e.g. 'magic_wand') — matches the GLB filename and
+    # the combined-avatar combos (<avatar>__<slug>.glb). Set by import_items.
+    slug = models.SlugField(max_length=60, blank=True, default='')
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to='items/', null=True, blank=True)
     # Optional 3D model (GLB) — e.g. generated with Hunyuan3D, served from media/.

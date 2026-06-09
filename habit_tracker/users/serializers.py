@@ -35,10 +35,16 @@ from .models import Reminder, Notification, AvatarModel
 class AvatarModelSerializer(serializers.ModelSerializer):
     glb = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
+    base = serializers.SerializerMethodField()
 
     class Meta:
         model = AvatarModel
-        fields = ['id', 'slug', 'name', 'emoji', 'glb', 'glb_url', 'thumbnail', 'scale']
+        fields = ['id', 'slug', 'base', 'name', 'emoji', 'glb', 'glb_url', 'thumbnail', 'scale']
+
+    def get_base(self, obj):
+        # 'fox-socketed' / 'fox2' -> 'fox' : matches the combos key <base>__<item>.
+        import re
+        return re.sub(r'[^a-z]', '', (obj.slug or '').lower().replace('socketed', ''))
 
     def get_glb(self, obj):
         if obj.glb:

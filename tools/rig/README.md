@@ -5,6 +5,42 @@ combined GLB. Two modes — **socket** (recommended) and **bone**.
 
 > Only the **hand** is supported for now — head attachment distorts the mesh.
 
+## How the app uses this (socket → app)
+The app's 3D viewer (`components/Avatar3D.js`) attaches items **at runtime** by
+reading the socket Empty's position straight from the avatar GLB — no per-combo
+file needed. The baked combined GLBs are kept as a preview/fallback.
+
+1. **Generate low-poly models** (already 20k faces — see `tools/hunyuan`):
+   `h3d gen <imgs> -q fast` → avatars + items.
+2. **Socket the avatars** in Blender (Empty named `socket_r` / `socket_head`),
+   export to `gen\avatars_socketed`.
+3. **(Optional) bake combos** for preview/fallback: `tools\rig\attach_all.ps1`.
+4. **Import into the backend** (run from `habit_tracker\`):
+   ```
+   python manage.py import_avatar_models --dir D:\blenderprojects\gen\avatars_socketed \
+       --thumbs-dir ..\habit_tracker\assets\animals_gemini_2d_v2 --replace
+   python manage.py import_items   --dir D:\blenderprojects\gen\items
+   python manage.py import_combos  --dir D:\blenderprojects\gen\out --clean
+   ```
+   `--replace` retires old high-poly avatars (`is_active=False`).
+5. The frontend maps each item's **anchor → socket**: `hand→socket_r`,
+   `head/face/neck→socket_head`, `back→socket_back` (see `ANCHOR_SOCKET` in
+   `challange/serializers.py` and `ANCHOR_TO_SOCKET` in `Avatar3D.js`). If an
+   avatar has no matching socket, it falls back to the old approximate anchor.
+
+### "faces 0" in Blender's Decimate panel
+Not a corruption — Decimate only counts faces when a **mesh** is selected. If you
+have the **Empty/socket** (or armature) selected it shows 0. These models are
+already decimated to 20k faces in `h3d` (`-q fast`); no Blender decimation needed.
+Lighter still: `h3d gen -q fast --faces <fewer>`.
+
+### Performance
+The big win is already done: old high-poly avatars (some 25 MB+) → 20k-face /
+2-7 MB. Runtime socket means the app downloads only the base avatar + small items
+(no N×M combined files). GLBs are disk-cached (`useCachedGlb`). Further levers if
+needed: lower `h3d --faces`, downscale item textures, or Draco — but Draco needs a
+decoder configured in the RN GLTF loader, so test before enabling.
+
 ## Socket mode (recommended) ⭐
 
 ### The socket (what YOU do in Blender, once per avatar)

@@ -2,12 +2,25 @@ from rest_framework import serializers
 from .models import Item, UserItem, ChallengeTemplate, Challenge
 from users.serializers import UserSerializer
 
+# Which avatar socket (Empty in the GLB) an item's anchor maps to in the viewer.
+ANCHOR_SOCKET = {
+    'hand': 'socket_r',
+    'head': 'socket_head',
+    'face': 'socket_head',
+    'neck': 'socket_head',
+    'back': 'socket_back',
+    'none': None,
+}
+
+
 class ItemSerializer(serializers.ModelSerializer):
     model_glb = serializers.SerializerMethodField()
+    socket = serializers.SerializerMethodField()
 
     class Meta:
         model = Item
-        fields = ['id', 'name', 'description', 'image', 'rarity', 'model_glb', 'model_url', 'anchor', 'item_scale']
+        fields = ['id', 'name', 'slug', 'description', 'image', 'rarity',
+                  'model_glb', 'model_url', 'anchor', 'item_scale', 'socket']
 
     def get_model_glb(self, obj):
         if obj.model_glb:
@@ -16,6 +29,9 @@ class ItemSerializer(serializers.ModelSerializer):
             except Exception:
                 return None
         return None
+
+    def get_socket(self, obj):
+        return ANCHOR_SOCKET.get(obj.anchor, 'socket_r')
 
 class ChallengeTemplateSerializer(serializers.ModelSerializer):
     reward_item = ItemSerializer(read_only=True)

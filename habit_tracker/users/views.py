@@ -298,6 +298,31 @@ class AvatarModelListView(APIView):
         return Response(AvatarModelSerializer(qs, many=True, context={'request': request}).data)
 
 
+class CombosView(APIView):
+    """Pre-baked combined avatar+item GLBs (media/models/combos/<avatar>__<item>.glb),
+    used as preview/fallback. Returns a map { '<avatarbase>__<itemslug>': url }."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import os
+        import re
+        from django.conf import settings
+        folder = os.path.join(settings.MEDIA_ROOT, 'models', 'combos')
+        out = {}
+        if os.path.isdir(folder):
+            base_url = settings.MEDIA_URL.rstrip('/') + '/models/combos/'
+            for f in os.listdir(folder):
+                if not (f.lower().endswith('.glb') and '__' in f):
+                    continue
+                stem = os.path.splitext(f)[0].lower()
+                av, item = stem.split('__', 1)
+                # Normalize the avatar part to its base ('bear_socketed' -> 'bear')
+                # so the key matches avatar.base + '__' + item.slug from the API.
+                av = re.sub(r'[^a-z]', '', av.replace('socketed', ''))
+                out[f"{av}__{item}"] = request.build_absolute_uri(base_url + f)
+        return Response(out)
+
+
 class BlockListView(APIView):
     """List users the current user has blocked."""
     permission_classes = [IsAuthenticated]
