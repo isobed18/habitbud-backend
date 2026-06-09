@@ -31,6 +31,7 @@ class CustomUser(AbstractUser):
     ]
     is_private = models.BooleanField(default=False, help_text="Private profiles hide habits/stats from non-friends")
     message_privacy = models.CharField(max_length=10, choices=MESSAGE_PRIVACY_CHOICES, default='everyone')
+    is_paid = models.BooleanField(default=False, help_text="Premium / paid account")
 
     def __str__(self):
         return self.username
