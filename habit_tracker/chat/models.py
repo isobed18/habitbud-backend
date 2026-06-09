@@ -6,6 +6,20 @@ from habits.models import Habit
 import uuid
 
 class Conversation(models.Model):
+    class LiveRoomType(models.TextChoices):
+        GENERAL = 'general', 'General'
+        STUDY = 'study', 'Study'
+        WORKOUT = 'workout', 'Workout'
+
+    class RoomPrivacy(models.TextChoices):
+        FRIENDS = 'friends', 'Friends'
+        PRIVATE = 'private', 'Private'
+        PUBLIC = 'public', 'Public'
+
+    class JoinPolicy(models.TextChoices):
+        OPEN = 'open', 'Open'
+        REQUEST = 'request', 'Request'
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="conversations")
     # Group chat room support. 1:1 DMs leave these defaults.
@@ -16,7 +30,18 @@ class Conversation(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name="created_rooms",
     )
+    live_room_type = models.CharField(max_length=20, choices=LiveRoomType.choices, default=LiveRoomType.GENERAL)
+    required_habit_slug = models.SlugField(max_length=50, blank=True, default='')
+    capacity = models.PositiveSmallIntegerField(default=8)
+    privacy = models.CharField(max_length=10, choices=RoomPrivacy.choices, default=RoomPrivacy.FRIENDS)
+    join_policy = models.CharField(max_length=10, choices=JoinPolicy.choices, default=JoinPolicy.OPEN)
+    pomodoro_work_minutes = models.PositiveSmallIntegerField(default=25)
+    pomodoro_break_minutes = models.PositiveSmallIntegerField(default=5)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def is_live_room(self):
+        return self.is_group and self.live_room_type != self.LiveRoomType.GENERAL
 
     def __str__(self):
         if self.is_group:
@@ -80,3 +105,20 @@ class StoryLike(models.Model):
 
     class Meta:
         unique_together = ('story', 'user')
+
+
+class LiveRoomJoinRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        DECLINED = 'declined', 'Declined'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    room = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='join_requests')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='live_room_join_requests')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('room', 'user')
+        ordering = ['-created_at']

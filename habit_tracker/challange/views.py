@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from django.db import transaction
 from .models import Item, ChallengeTemplate, Challenge, UserItem
 from .serializers import ItemSerializer, ChallengeTemplateSerializer, ChallengeSerializer
 from django.utils import timezone
@@ -204,6 +205,45 @@ class UserInventoryView(generics.ListAPIView):
             item_data['obtained_at'] = ui.obtained_at
             data.append(item_data)
         return Response(data)
+
+
+class ItemShopView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        owned = set(UserItem.objects.filter(user=request.user).values_list('item_id', flat=True))
+        items = []
+        for item in Item.objects.filter(is_shop_item=True).order_by('shop_sort', 'price_points', 'name'):
+            data = ItemSerializer(item, context={'request': request}).data
+            data['owned'] = item.id in owned
+            items.append(data)
+        return Response({
+            'balance': request.user.points,
+            'currency': 'gems',
+            'items': items,
+            'streak_freezes': getattr(request.user, 'streak_freezes', 0),
+        })
+
+
+class BuyItemView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, item_id):
+        with transaction.atomic():
+            item = get_object_or_404(Item.objects.select_for_update(), id=item_id, is_shop_item=True)
+            user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
+            if UserItem.objects.filter(user=user, item=item).exists():
+                return Response({'error': 'Bu item zaten envanterinde.'}, status=status.HTTP_400_BAD_REQUEST)
+            if user.points < item.price_points:
+                return Response({'error': f'Yetersiz elmas. Bu item {item.price_points} elmas.'}, status=status.HTTP_400_BAD_REQUEST)
+            user.points -= item.price_points
+            user.save(update_fields=['points'])
+            UserItem.objects.create(user=user, item=item)
+
+        return Response({
+            'points': user.points,
+            'item': ItemSerializer(item, context={'request': request}).data,
+        }, status=status.HTTP_201_CREATED)
 
 class ChallengeCompletedListView(generics.ListAPIView):
     """List successfully completed challenges for the current user."""

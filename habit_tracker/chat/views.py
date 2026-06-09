@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
-from .models import Conversation, ChatMessage
+from .models import Conversation, ChatMessage, LiveRoomJoinRequest
 from .serializers import ConversationSerializer, ChatMessageSerializer
 from friends.models import Friendship
 from django.db.models import Q, Count
@@ -99,10 +99,48 @@ class CreateRoomView(APIView):
         if not name:
             return Response({'error': 'name is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        room = Conversation.objects.create(name=name, is_group=True, created_by=request.user)
+        live_room_type = request.data.get('live_room_type') or Conversation.LiveRoomType.GENERAL
+        if live_room_type not in Conversation.LiveRoomType.values:
+            return Response({'error': 'Invalid live_room_type.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        privacy = request.data.get('privacy') or Conversation.RoomPrivacy.FRIENDS
+        if privacy not in Conversation.RoomPrivacy.values:
+            privacy = Conversation.RoomPrivacy.FRIENDS
+
+        join_policy = request.data.get('join_policy') or Conversation.JoinPolicy.OPEN
+        if join_policy not in Conversation.JoinPolicy.values:
+            join_policy = Conversation.JoinPolicy.OPEN
+
+        try:
+            capacity = max(2, min(int(request.data.get('capacity') or 8), 50))
+            work_minutes = max(1, min(int(request.data.get('pomodoro_work_minutes') or 25), 180))
+            break_minutes = max(1, min(int(request.data.get('pomodoro_break_minutes') or 5), 60))
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid room timer or capacity.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        required_habit_slug = request.data.get('required_habit_slug') or ''
+        if live_room_type == Conversation.LiveRoomType.STUDY:
+            required_habit_slug = required_habit_slug or 'study'
+        elif live_room_type == Conversation.LiveRoomType.WORKOUT:
+            required_habit_slug = required_habit_slug or 'workout'
+
+        room = Conversation.objects.create(
+            name=name,
+            is_group=True,
+            created_by=request.user,
+            live_room_type=live_room_type,
+            required_habit_slug=required_habit_slug,
+            capacity=capacity,
+            privacy=privacy,
+            join_policy=join_policy,
+            pomodoro_work_minutes=work_minutes,
+            pomodoro_break_minutes=break_minutes,
+        )
         room.participants.add(request.user)
 
         for uid in participant_ids:
+            if room.participants.count() >= room.capacity:
+                break
             try:
                 friend = User.objects.get(id=uid)
             except (User.DoesNotExist, ValueError, TypeError):
@@ -124,6 +162,12 @@ class RoomMembershipView(APIView):
 
     def post(self, request, conversation_id, *args, **kwargs):
         room = get_object_or_404(Conversation, id=conversation_id, is_group=True)
+        if room.participants.filter(id=request.user.id).exists():
+            return Response(ConversationSerializer(room, context={'request': request}).data)
+        if room.participants.count() >= room.capacity:
+            return Response({'error': 'Room is full.'}, status=status.HTTP_400_BAD_REQUEST)
+        if room.join_policy == Conversation.JoinPolicy.REQUEST and room.created_by != request.user:
+            return Response({'error': 'This room requires a join request.'}, status=status.HTTP_403_FORBIDDEN)
         room.participants.add(request.user)
         return Response(ConversationSerializer(room, context={'request': request}).data)
 
@@ -131,6 +175,92 @@ class RoomMembershipView(APIView):
         room = get_object_or_404(Conversation, id=conversation_id, is_group=True)
         room.participants.remove(request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LiveRoomDiscoveryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Conversation.objects.filter(
+            is_group=True,
+            privacy=Conversation.RoomPrivacy.PUBLIC,
+        ).exclude(live_room_type=Conversation.LiveRoomType.GENERAL).prefetch_related('participants')
+
+        room_type = request.query_params.get('type')
+        if room_type in Conversation.LiveRoomType.values:
+            qs = qs.filter(live_room_type=room_type)
+
+        rooms = []
+        pending_ids = set(LiveRoomJoinRequest.objects.filter(
+            user=request.user,
+            status=LiveRoomJoinRequest.Status.PENDING,
+        ).values_list('room_id', flat=True))
+
+        for room in qs.order_by('-created_at')[:50]:
+            data = ConversationSerializer(room, context={'request': request}).data
+            data['participant_count'] = room.participants.count()
+            data['has_join_request'] = room.id in pending_ids
+            data['is_member'] = room.participants.filter(id=request.user.id).exists()
+            rooms.append(data)
+        return Response(rooms)
+
+
+class LiveRoomJoinRequestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, conversation_id):
+        room = get_object_or_404(Conversation, id=conversation_id, is_group=True, created_by=request.user)
+        data = [
+            {
+                'id': str(req.id),
+                'user': {'id': str(req.user.id), 'username': req.user.username},
+                'status': req.status,
+                'created_at': req.created_at,
+            }
+            for req in room.join_requests.filter(status=LiveRoomJoinRequest.Status.PENDING).select_related('user')
+        ]
+        return Response(data)
+
+    def post(self, request, conversation_id):
+        room = get_object_or_404(Conversation, id=conversation_id, is_group=True)
+        if room.participants.filter(id=request.user.id).exists():
+            return Response(ConversationSerializer(room, context={'request': request}).data)
+        if room.participants.count() >= room.capacity:
+            return Response({'error': 'Room is full.'}, status=status.HTTP_400_BAD_REQUEST)
+        if room.join_policy == Conversation.JoinPolicy.OPEN:
+            room.participants.add(request.user)
+            return Response(ConversationSerializer(room, context={'request': request}).data)
+
+        req, _ = LiveRoomJoinRequest.objects.update_or_create(
+            room=room,
+            user=request.user,
+            defaults={'status': LiveRoomJoinRequest.Status.PENDING},
+        )
+        return Response({'id': str(req.id), 'status': req.status}, status=status.HTTP_201_CREATED)
+
+
+class LiveRoomJoinRequestRespondView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, request_id):
+        action = request.data.get('action')
+        if action not in ['accept', 'decline']:
+            return Response({'error': 'Invalid action.'}, status=status.HTTP_400_BAD_REQUEST)
+        req = get_object_or_404(
+            LiveRoomJoinRequest,
+            id=request_id,
+            room__created_by=request.user,
+            status=LiveRoomJoinRequest.Status.PENDING,
+        )
+        if action == 'accept':
+            if req.room.participants.count() >= req.room.capacity:
+                return Response({'error': 'Room is full.'}, status=status.HTTP_400_BAD_REQUEST)
+            req.room.participants.add(req.user)
+            req.status = LiveRoomJoinRequest.Status.ACCEPTED
+        else:
+            req.status = LiveRoomJoinRequest.Status.DECLINED
+        req.save(update_fields=['status'])
+        return Response({'status': req.status})
 
 class MessageListView(generics.ListAPIView):
     serializer_class = ChatMessageSerializer

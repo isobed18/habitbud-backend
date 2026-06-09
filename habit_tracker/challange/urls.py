@@ -3,7 +3,7 @@ from .views import (
     ChallengeTemplateListView, JoinChallengeView, 
     ChallengeActiveListView, VerifyDuoView,
     AcceptChallengeView, WithdrawChallengeView,
-    ChallengeCompletedListView
+    ChallengeCompletedListView, ItemShopView, BuyItemView
 )
 
 urlpatterns = [
@@ -14,4 +14,6 @@ urlpatterns = [
     path('active/', ChallengeActiveListView.as_view(), name='challenge-active'),
     path('completed/', ChallengeCompletedListView.as_view(), name='challenge-completed'),
     path('<uuid:challenge_id>/verify/', VerifyDuoView.as_view(), name='challenge-verify'),
+    path('shop/', ItemShopView.as_view(), name='item-shop'),
+    path('shop/<uuid:item_id>/buy/', BuyItemView.as_view(), name='item-buy'),
 ]

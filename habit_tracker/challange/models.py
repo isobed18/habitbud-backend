@@ -22,6 +22,9 @@ class Item(models.Model):
     model_glb = models.FileField(upload_to='models/items/', null=True, blank=True)
     model_url = models.URLField(blank=True, default='', help_text="External GLB URL (alternative to uploaded file)")
     rarity = models.CharField(max_length=20, choices=RARITY_CHOICES, default='common')
+    is_shop_item = models.BooleanField(default=False)
+    price_points = models.PositiveIntegerField(default=0)
+    shop_sort = models.PositiveSmallIntegerField(default=100)
 
     # Where the item attaches on the avatar (approximate, non-rigged MVP).
     ANCHOR_CHOICES = [

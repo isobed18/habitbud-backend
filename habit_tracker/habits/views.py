@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from .models import Habit
 from .forms import HabitForm
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes
 from .serializers import HabitSerializer
@@ -210,6 +210,26 @@ class HabitStatsView(APIView):
         # Convert to list and sort
         calendar_data = list(calendar_map.values())
         calendar_data.sort(key=lambda x: x['date'])
+
+        status_counts = {'completed': 0, 'partial': 0, 'missed': 0}
+        weekly_map = {}
+        for entry in calendar_data:
+            status_key = entry.get('status') or 'missed'
+            if status_key in status_counts:
+                status_counts[status_key] += 1
+            entry_date = datetime.strptime(entry['date'], "%Y-%m-%d").date()
+            week_start = entry_date - timedelta(days=entry_date.weekday())
+            key = week_start.strftime("%Y-%m-%d")
+            if key not in weekly_map:
+                weekly_map[key] = {'week_start': key, 'completed': 0, 'partial': 0, 'missed': 0, 'total': 0}
+            weekly_map[key][status_key if status_key in ['completed', 'partial', 'missed'] else 'missed'] += 1
+            weekly_map[key]['total'] += 1
+
+        current_value = habit.count
+        target_value = habit.target_count
+        if habit.habit_type == 'time':
+            current_value = int(habit.total_time.total_seconds()) if habit.total_time else 0
+            target_value = int(habit.target_time.total_seconds()) if habit.target_time else 0
         
         # 2. Stats
         total_completions = habit.completed_count
@@ -224,10 +244,21 @@ class HabitStatsView(APIView):
                 completion_rate = (total_completions / total_days) * 100
                 
         stats = {
+            "habit_name": habit.name,
+            "habit_type": habit.habit_type,
             "current_streak": habit.streak,
             "best_streak": habit.best_streak,
             "total_completions": total_completions,
+            "verification_count": habit.verified_count,
+            "verified_streak": habit.verification_streak,
             "completion_rate": round(completion_rate, 1),
+            "status_counts": status_counts,
+            "weekly": list(weekly_map.values())[-12:],
+            "progress": {
+                "current": current_value,
+                "target": target_value,
+                "percent": round((current_value / target_value) * 100, 1) if target_value else 0,
+            },
             "calendar": calendar_data
         }
 
