@@ -147,8 +147,9 @@ def main():
         with open(args.config, 'r', encoding='utf-8') as f:
             cfg = json.load(f)
     item_key = os.path.splitext(os.path.basename(args.item))[0].lower()
-    settings = dict(cfg.get('_default', {}))
-    settings.update(cfg.get(item_key, {}))
+    bone = cfg.get('bone', cfg)  # support new {"bone":{...}} layout and old flat layout
+    settings = dict(bone.get('_default', {}))
+    settings.update(bone.get(item_key, {}))
     fit   = args.fit   if args.fit   is not None else settings.get('fit', 0.35)
     scale = args.scale if args.scale is not None else settings.get('scale', 1.0)
     loc   = args.loc   if args.loc   is not None else settings.get('loc', [0, 0, 0])

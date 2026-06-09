@@ -53,8 +53,8 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null
 
 if ($All) {
     $json = Get-Content $config -Raw | ConvertFrom-Json
-    if ($Socket) { $names = $json.socket.PSObject.Properties.Name }
-    else         { $names = $json.PSObject.Properties.Name | Where-Object { $_ -notlike '_*' -and $_ -ne 'socket' } }
+    if ($Socket) { $names = $json.sockets.socket_r }   # quick single-avatar test: hand items
+    else         { $names = $json.bone.PSObject.Properties.Name | Where-Object { $_ -notlike '_*' } }
     foreach ($n in $names) {
         $ip = Join-Path $itemDir ($n + '.glb')
         if (Test-Path $ip) { Attach $ip (Join-Path $OutDir "${prefix}_$n.glb") }

@@ -17,21 +17,34 @@ Add an **Empty** at the right hand:
 
 You only ever define the **right hand**. All hand items attach automatically.
 
+### Sockets & items are fully configurable (`item_attach.json`)
+```json
+"sockets": {
+  "socket_r":    ["magic_wand","dumbell","coffee_mug","water_bottle","book","balloons"],
+  "socket_head": ["beanie","cap","crown","face_mask","pink_headphones","pink_sunglasses","round_glasses"]
+}
+```
+Each key is a socket **Empty name**; its list is the items that attach there.
+Add/remove items by editing the lists; add new sockets (e.g. `socket_l`) freely.
+Per-item scale/offset lives in `socket_tuning` (`fit_ratio` = item size as a
+fraction of the avatar; `loc`/`rot_deg` are socket-relative).
+
 ### Attach everything (batch) — the main workflow
-Drop your socketed avatars in one folder and the item GLBs in another, then:
+Socketed avatars in one folder, item GLBs in another:
 ```powershell
-tools\rig\attach_all.ps1 `
-  -AvatarsDir D:\blenderprojects\gen\avatars_socketed `
-  -ItemsDir   D:\blenderprojects\gen\items `
-  -OutDir     D:\blenderprojects\gen\out
+tools\rig\attach_all.ps1                                  # ALL sockets, all their items
+tools\rig\attach_all.ps1 -Sockets socket_r               # hand only
+tools\rig\attach_all.ps1 -Sockets socket_head            # head only
+tools\rig\attach_all.ps1 -Sockets socket_r,socket_head   # hand + head
+tools\rig\attach_all.ps1 -Items magic_wand,coffee_mug    # only these items
+tools\rig\attach_all.ps1 -Avatars fox,cat                # only these avatars
+tools\rig\attach_all.ps1 -Force                          # overwrite (see below)
 ```
-This produces `<avatar>__<item>.glb` for **every avatar × every hand item**
-(`magic_wand, dumbell, coffee_mug, water_bottle, book, balloons` — the
-`hand_items` list in `item_attach.json`). Options:
-```powershell
--Socket socket_r              # socket Empty name (default socket_r)
--Items magic_wand,coffee_mug  # only these items
-```
+Output: `<avatar>__<item>.glb` in `-OutDir`. **Existing files are kept by
+default** so manual fixes (saved under the same filename) survive a re-run —
+pass `-Force` to regenerate. Dirs default to
+`D:\blenderprojects\gen\{avatars_socketed,items,out}` (override with
+`-AvatarsDir`/`-ItemsDir`/`-OutDir`).
 
 ### Attach one (quick test)
 ```powershell

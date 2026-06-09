@@ -102,8 +102,9 @@ def main():
         with open(args.config, 'r', encoding='utf-8') as f:
             cfg = json.load(f)
     key = os.path.splitext(os.path.basename(args.item))[0].lower()
-    s = dict(cfg.get('_socket_default', {}))
-    s.update(cfg.get('socket', {}).get(key, {}))
+    tuning = cfg.get('socket_tuning', {})
+    s = dict(tuning.get('_default', {}))
+    s.update(tuning.get(key, {}))
     fit_ratio = args.fit_ratio if args.fit_ratio is not None else s.get('fit_ratio', 1.6)
     scale     = args.scale     if args.scale     is not None else s.get('scale', 1.0)
     loc       = args.loc       if args.loc       is not None else s.get('loc', [0, 0, 0])
