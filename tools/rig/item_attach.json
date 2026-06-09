@@ -9,13 +9,15 @@
   "book":          { "fit": 0.40, "rot_deg": [0, 0, 0],   "loc": [0, 0.03, 0] },
   "balloons":      { "fit": 0.70, "rot_deg": [0, 0, 0],   "loc": [0, 0.30, 0] },
 
-  "_socket_default": { "fit_ratio": 1.6, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
+  "_socket_comment": "fit_ratio is the item's max dimension as a FRACTION OF THE AVATAR size (avatar ~2 units). loc/rot_deg are relative to the socket. glTF drops the Empty's display size, so scale is avatar-relative.",
+  "_socket_default": { "fit_ratio": 0.22, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
   "hand_items": ["magic_wand", "dumbell", "coffee_mug", "water_bottle", "book", "balloons"],
   "socket": {
-    "magic_wand":   { "fit_ratio": 2.2, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.10] },
-    "coffee_mug":   { "fit_ratio": 1.3, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "dumbell":      { "fit_ratio": 1.6, "rot_deg": [0, 0, 90], "loc": [0, 0, 0] },
-    "water_bottle": { "fit_ratio": 1.8, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.05] },
-    "book":         { "fit_ratio": 1.7, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] }
+    "magic_wand":   { "fit_ratio": 0.32, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.04] },
+    "coffee_mug":   { "fit_ratio": 0.19, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
+    "dumbell":      { "fit_ratio": 0.23, "rot_deg": [0, 0, 90], "loc": [0, 0, 0] },
+    "water_bottle": { "fit_ratio": 0.26, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.02] },
+    "book":         { "fit_ratio": 0.24, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
+    "balloons":     { "fit_ratio": 0.45, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.10] }
   }
 }

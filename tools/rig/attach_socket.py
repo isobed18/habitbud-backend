@@ -117,13 +117,16 @@ def main():
     avatar_mesh = socket.parent
     while avatar_mesh and avatar_mesh.type != 'MESH':
         avatar_mesh = avatar_mesh.parent
-    sock_size = socket.empty_display_size or 0.25
-    print(f'  socket={socket.name}  parent_mesh={avatar_mesh.name if avatar_mesh else "?"}  size={sock_size:.3f}')
+    # Scale reference = the avatar's size, NOT the socket's display size.
+    # glTF does not preserve an Empty's display size across export/import (it
+    # comes back ~0.001), so we size the item as a fraction of the avatar.
+    avatar_dim = max(avatar_mesh.dimensions) if avatar_mesh else 2.0
+    print(f'  socket={socket.name}  parent_mesh={avatar_mesh.name if avatar_mesh else "?"}  avatar_dim={avatar_dim:.3f}')
 
     print(f'item: {args.item}  (config key: {key})')
     item = consolidate_item(import_glb(args.item))
 
-    target = sock_size * fit_ratio * scale
+    target = avatar_dim * fit_ratio * scale
     base = target / (max(item.dimensions) or 1.0)
     item.scale = (base, base, base)
     bpy.context.view_layer.update()
