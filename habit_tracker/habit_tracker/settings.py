@@ -125,6 +125,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': os.getenv('THROTTLE_ANON', '60/min'),
         'user': os.getenv('THROTTLE_USER', '300/min'),
+        'checks': os.getenv('THROTTLE_CHECKS', '30/hour'),  # proof/check submissions
     },
 }
 

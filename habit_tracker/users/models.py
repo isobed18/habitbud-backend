@@ -32,6 +32,32 @@ class CustomUser(AbstractUser):
     is_private = models.BooleanField(default=False, help_text="Private profiles hide habits/stats from non-friends")
     message_privacy = models.CharField(max_length=10, choices=MESSAGE_PRIVACY_CHOICES, default='everyone')
     is_paid = models.BooleanField(default=False, help_text="Premium / paid account")
+    # Daily AI-verification quota (free users). Counts only APPROVED verdicts —
+    # rejected/skipped checks never consume a credit. Keyed to the DAY (not the
+    # habit), so creating/deleting habits cannot reset or farm it.
+    ai_checks_date = models.DateField(null=True, blank=True)
+    ai_checks_count = models.PositiveIntegerField(default=0)
+
+    AI_DAILY_FREE_LIMIT = 5
+
+    def ai_quota_left(self):
+        """Remaining AI verifications today (None = unlimited for paid users)."""
+        from django.utils import timezone
+        if self.is_paid:
+            return None
+        today = timezone.localdate()
+        used = self.ai_checks_count if self.ai_checks_date == today else 0
+        return max(0, self.AI_DAILY_FREE_LIMIT - used)
+
+    def consume_ai_credit(self):
+        """Record one APPROVED AI verification for today."""
+        from django.utils import timezone
+        today = timezone.localdate()
+        if self.ai_checks_date != today:
+            self.ai_checks_date = today
+            self.ai_checks_count = 0
+        self.ai_checks_count += 1
+        self.save(update_fields=['ai_checks_date', 'ai_checks_count'])
 
     def __str__(self):
         return self.username

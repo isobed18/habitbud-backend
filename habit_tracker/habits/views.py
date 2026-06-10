@@ -84,7 +84,18 @@ class HabitListView(APIView):
         serializer = HabitSerializer(habits, many=True)
         return Response(serializer.data)
 
+    FREE_HABIT_LIMIT = 5
+
     def post(self, request):
+        # Free accounts: at most 5 habits. Paid: unlimited.
+        if not request.user.is_paid and \
+                request.user.habits.count() >= self.FREE_HABIT_LIMIT:
+            return Response(
+                {'error': f'Ücretsiz hesapta en fazla {self.FREE_HABIT_LIMIT} alışkanlık olabilir. '
+                          'Sınırsız alışkanlık için Premium\'a geç!',
+                 'code': 'habit_limit'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = HabitSerializer(data=request.data)
         if serializer.is_valid():
             # The serializer will create the habit and associate the user

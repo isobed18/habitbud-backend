@@ -436,12 +436,17 @@ class BlockView(APIView):
 class BuyStreakFreezeView(APIView):
     permission_classes = [IsAuthenticated]
 
+    MAX_FREEZES = 2  # no unlimited stockpiling — keeps streaks meaningful
+
     def post(self, request):
         user = request.user
         cost = 20
+        if user.streak_freezes >= self.MAX_FREEZES:
+            return Response({'error': f'En fazla {self.MAX_FREEZES} Seri Dondurucu taşıyabilirsin.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         if user.points < cost:
             return Response({'error': 'Yetersiz elmas. Seri Dondurucu satın almak için 20 elmas gerekiyor.'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         user.points -= cost
         user.streak_freezes += 1
         user.save(update_fields=['points', 'streak_freezes'])

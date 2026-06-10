@@ -57,6 +57,16 @@ class Habit(models.Model):
     icon = models.CharField(max_length=8, blank=True, default='', help_text="Emoji shown for this habit, e.g. 💧")
     custom_frequency_days = models.IntegerField(null=True, blank=True)
 
+    # Scheduling (restored: migration 0012 was applied but the fields had been
+    # dropped from the model, leaving NOT NULL columns no INSERT could satisfy —
+    # habit creation 500'd until these came back).
+    SCHEDULE_TYPE_CHOICES = [('daily', 'Daily'), ('weekdays', 'Weekdays'), ('times_per_week', 'Times per week')]
+    schedule_type = models.CharField(max_length=20, choices=SCHEDULE_TYPE_CHOICES, default='daily')
+    schedule_weekdays = models.CharField(max_length=20, blank=True, default='',
+                                         help_text="Comma-separated weekday numbers, e.g. '0,2,4'")
+    schedule_target_count = models.PositiveSmallIntegerField(default=1)
+    schedule_locked = models.BooleanField(default=False)
+
     class Meta:
         indexes = [
             models.Index(fields=['user', 'last_completed_date']),

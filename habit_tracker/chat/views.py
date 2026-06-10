@@ -305,6 +305,11 @@ class MessageCreateView(generics.CreateAPIView):
 
 class ProofSubmissionView(APIView):
     permission_classes = [IsAuthenticated]
+    # Abuse guard: image upload + AI + push fan-out is the most expensive call
+    # in the app — cap bursts per user (configurable via THROTTLE_CHECKS).
+    from rest_framework.throttling import ScopedRateThrottle
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'checks'
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
@@ -328,10 +333,19 @@ class ProofSubmissionView(APIView):
             return Response({'error': 'Habit must be completed before submitting proof.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # 0. Optional AI pre-verification: "AI verifies first, then friends."
-        # Env-gated (AI_VERIFY_PROVIDER=off by default) and fail-open, so the
-        # social flow is untouched unless AI confidently rejects the photo.
-        from habit_tracker.ai_verification import verify_check
-        ai = verify_check(proof_image, habit.name)
+        # Env-gated (AI_VERIFY_PROVIDER=off by default) and fail-open. Free users
+        # get AI_DAILY_FREE_LIMIT approvals/day: only APPROVED verdicts consume a
+        # credit (rejected/skipped refund by never charging), and the counter is
+        # per-day per-user, so add/delete habit churn can't farm or reset it.
+        # Past the quota the AI step is skipped and the check goes straight to
+        # friends (social flow is never blocked).
+        from habit_tracker.ai_verification import verify_check, AIVerdict
+        if request.user.ai_quota_left() == 0:
+            ai = AIVerdict(True, 'skipped', reason='daily AI quota reached')
+        else:
+            ai = verify_check(proof_image, habit.name)
+            if ai.ok and ai.verdict == 'approved':
+                request.user.consume_ai_credit()
         if not ai.ok:
             return Response(
                 {'error': 'Check fotoğrafı doğrulanamadı. Lütfen alışkanlığını gösteren net bir fotoğraf çek.',
