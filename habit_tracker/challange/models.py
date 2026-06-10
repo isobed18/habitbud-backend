@@ -45,6 +45,7 @@ class UserItem(models.Model):
 
     class Meta:
         unique_together = ('user', 'item')
+        ordering = ['-obtained_at']
 
 class ChallengeTemplate(models.Model):
     """System-defined challenge presets."""
