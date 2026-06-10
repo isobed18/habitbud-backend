@@ -391,16 +391,26 @@ class ProofSubmissionView(APIView):
             verification_status=ChatMessage.VerificationStatus.PENDING
         )
 
-        # Flat "paper-plane" reward for sending a check.
+        # Flat "paper-plane" reward for sending a check — but only the FIRST
+        # check per habit per day earns XP (resending the same habit's check to
+        # more friends still works socially, it just isn't an XP faucet).
+        from django.utils import timezone as _tz
         from users.gamification import GamificationEngine
         from users.services import UserService
-        UserService.add_xp(request.user, GamificationEngine.BASE_SUBMIT_XP)
+        already_sent_today = ChatMessage.objects.filter(
+            sender=request.user, related_habit=habit,
+            message_type=ChatMessage.MessageType.PROOF,
+            created_at__date=_tz.localdate(),
+        ).exclude(id=proof_message.id).exists()
+        submit_xp = 0 if already_sent_today else GamificationEngine.BASE_SUBMIT_XP
+        if submit_xp:
+            UserService.add_xp(request.user, submit_xp)
 
         self.broadcast_proof_message(proof_message)
         return Response(
             {
                 **ChatMessageSerializer(proof_message).data,
-                'xp_earned': GamificationEngine.BASE_SUBMIT_XP,
+                'xp_earned': submit_xp,
                 'ai': ai.as_dict(),
             },
             status=status.HTTP_201_CREATED,
@@ -493,23 +503,39 @@ class VerifyProofView(APIView):
             except Exception as e:
                 logging.getLogger(__name__).error(f"Error updating friendship streak: {e}")
 
-            # SENDER: base_verify × habit_streak_mult × friend_streak_mult
+            # Anti-farm: only the FIRST approval per habit per day pays out.
+            # Two friends ping-ponging approvals on the same habit get the
+            # social status update but no repeated XP/diamonds.
+            from django.utils import timezone as _tz
+            already_rewarded_today = ChatMessage.objects.filter(
+                related_habit=habit,
+                verification_status=ChatMessage.VerificationStatus.VERIFIED,
+                created_at__date=_tz.localdate(),
+            ).exclude(id=proof_message.id).exists() if habit else False
+
             habit_streak = habit.verification_streak if habit else 0
-            sender_xp, h_mult, f_mult = GamificationEngine.calculate_full_reward(
-                GamificationEngine.BASE_VERIFY_XP, habit_streak, friend_streak
-            )
-            UserService.add_xp(proof_message.sender, sender_xp)
-            
-            # Award points (diamonds) decoupled from XP
-            UserService.add_points(proof_message.sender, 1)
-            UserService.add_points(request.user, 1)
+            if already_rewarded_today:
+                sender_xp = verifier_xp = 0
+                h_mult = f_mult = 1.0
+            else:
+                # SENDER: base_verify × habit_streak_mult × friend_streak_mult
+                sender_xp, h_mult, f_mult = GamificationEngine.calculate_full_reward(
+                    GamificationEngine.BASE_VERIFY_XP, habit_streak, friend_streak
+                )
+                UserService.add_xp(proof_message.sender, sender_xp)
 
-            # VERIFIER: base_verifier × friend_streak_mult
-            verifier_xp = int(round(GamificationEngine.BASE_VERIFIER_XP *
-                            GamificationEngine.calculate_friend_streak_multiplier(friend_streak)))
-            UserService.add_xp(request.user, verifier_xp)
+                # Award points (diamonds) decoupled from XP
+                UserService.add_points(proof_message.sender, 1)
+                UserService.add_points(request.user, 1)
 
-            is_milestone = bool(habit and GamificationEngine.is_milestone(habit_streak))
+                # VERIFIER: base_verifier × friend_streak_mult
+                verifier_xp = int(round(GamificationEngine.BASE_VERIFIER_XP *
+                                GamificationEngine.calculate_friend_streak_multiplier(friend_streak)))
+                UserService.add_xp(request.user, verifier_xp)
+
+            # Milestone bonus rides the same once-per-day gate as the XP above.
+            is_milestone = bool(habit and not already_rewarded_today
+                                and GamificationEngine.is_milestone(habit_streak))
             milestone_bonus = 0
             if is_milestone:
                 milestone_bonus = habit_streak * 2
