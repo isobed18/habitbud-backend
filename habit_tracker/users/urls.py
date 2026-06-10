@@ -32,6 +32,7 @@ urlpatterns = [
     path('api/combos/', views.CombosView.as_view(), name='avatar-item-combos'),
     path('api/verify-purchase/', views.VerifyPurchaseView.as_view(), name='verify-purchase'),
     path('api/attach-tuning/', views.AttachTuningView.as_view(), name='attach-tuning'),
+    path('api/stats/', views.UserStatsView.as_view(), name='user-stats'),
 
     # Auth extensions: e-mail verification + social sign-in
     path('api/email/send-verification/', auth_extras.SendEmailVerificationView.as_view(), name='email-send-verification'),

@@ -298,6 +298,59 @@ class AvatarModelListView(APIView):
         return Response(AvatarModelSerializer(qs, many=True, context={'request': request}).data)
 
 
+class UserStatsView(APIView):
+    """Detailed personal stats for the Stats screen: 30-day activity series,
+    streaks, check/approval totals, XP/level/diamonds, per-habit summary."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models import Count
+        from habits.models import HabitCompletion
+        from chat.models import ChatMessage
+
+        user = request.user
+        today = timezone.localdate()
+        start = today - timedelta(days=29)
+
+        # Daily completion counts, last 30 days (fill gaps with 0).
+        rows = (HabitCompletion.objects
+                .filter(habit__user=user, completed_at__gte=start)
+                .values('completed_at').annotate(n=Count('id')))
+        by_day = {r['completed_at']: r['n'] for r in rows}
+        series = [{'date': (start + timedelta(days=i)).isoformat(),
+                   'count': by_day.get(start + timedelta(days=i), 0)}
+                  for i in range(30)]
+
+        checks = ChatMessage.objects.filter(sender=user, message_type=ChatMessage.MessageType.PROOF)
+        total_checks = checks.count()
+        verified = checks.filter(verification_status=ChatMessage.VerificationStatus.VERIFIED).count()
+
+        habits = list(user.habits.all())
+        per_habit = [{
+            'id': str(h.id), 'name': h.name, 'icon': h.icon, 'color': h.color,
+            'streak': h.streak, 'best_streak': h.best_streak,
+            'verification_streak': h.verification_streak,
+        } for h in habits]
+
+        return Response({
+            'xp': user.xp, 'level': user.level, 'points': user.points,
+            'streak_freezes': user.streak_freezes,
+            'active_days_30': sum(1 for s in series if s['count'] > 0),
+            'completions_30': sum(s['count'] for s in series),
+            'series_30': series,
+            'total_checks': total_checks,
+            'verified_checks': verified,
+            'approval_rate': round(verified / total_checks, 3) if total_checks else None,
+            'best_streak': max((h.best_streak for h in habits), default=0),
+            'current_max_streak': max((h.streak for h in habits), default=0),
+            'habits': per_habit,
+            'ai_quota_left': user.ai_quota_left(),
+            'is_paid': user.is_paid,
+        })
+
+
 class AttachTuningView(APIView):
     """Item placement tuning for the runtime 3D dress-up: socket lists, per-item
     defaults and per-(avatar,item) fixes. Published by `import_attach_tuning`."""
