@@ -75,6 +75,8 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ['created_at']
+        # Hot path: message list + "last message" per conversation.
+        indexes = [models.Index(fields=['conversation', 'created_at'])]
 
 class Story(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

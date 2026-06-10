@@ -73,7 +73,8 @@ class ConversationListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return self.request.user.conversations.all().distinct()
+        # participants feed UserSerializer(many) — prefetch kills the N+1.
+        return self.request.user.conversations.all().distinct().prefetch_related('participants')
 
 
 class ConversationDetailView(generics.RetrieveAPIView):
@@ -269,9 +270,9 @@ class MessageListView(generics.ListAPIView):
     def get_queryset(self):
         conversation_id = self.kwargs['conversation_id']
         conversation = get_object_or_404(Conversation, id=conversation_id)
-        if self.request.user not in conversation.participants.all():
+        if not conversation.participants.filter(id=self.request.user.id).exists():
             return ChatMessage.objects.none()
-        return conversation.messages.all()
+        return conversation.messages.select_related('sender')
 
 class MessageCreateView(generics.CreateAPIView):
     serializer_class = ChatMessageSerializer

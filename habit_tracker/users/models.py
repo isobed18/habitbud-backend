@@ -126,6 +126,8 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        # Hot path: unread badge + notification list per user.
+        indexes = [models.Index(fields=['user', 'is_read'])]
 
     def __str__(self):
         return f"{self.title} - {self.user.username}"

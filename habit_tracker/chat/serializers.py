@@ -54,7 +54,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         ]
 
     def get_last_message(self, obj):
-        last_message = obj.messages.last()
+        last_message = obj.messages.select_related('sender').last()
         if last_message:
             return ChatMessageSerializer(last_message).data
         return None

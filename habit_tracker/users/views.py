@@ -351,6 +351,10 @@ class CombosView(APIView):
         import os
         import re
         from django.conf import settings
+        from django.core.cache import cache
+        cached = cache.get('combo_glb_map')
+        if cached is not None:
+            return Response(cached)
         folder = os.path.join(settings.MEDIA_ROOT, 'models', 'combos')
         out = {}
         if os.path.isdir(folder):
@@ -364,6 +368,7 @@ class CombosView(APIView):
                 # so the key matches avatar.base + '__' + item.slug from the API.
                 av = re.sub(r'[^a-z]', '', av.replace('socketed', ''))
                 out[f"{av}__{item}"] = request.build_absolute_uri(base_url + f)
+        cache.set('combo_glb_map', out, 300)  # filesystem scan, content rarely changes
         return Response(out)
 
 
