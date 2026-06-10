@@ -55,6 +55,24 @@ Cloud fallback instead: `AI_VERIFY_PROVIDER=openai`,
 `AI_VERIFY_URL=https://api.openai.com`, `AI_VERIFY_MODEL=gpt-4o-mini`,
 `OPENAI_API_KEY=...`.
 
+## Cost tuning (measured on this 3090)
+
+Images are **downscaled to 512px** before hitting the model
+(`AI_VERIFY_IMAGE_SIZE`, in `_downscale`) — fewer vision tokens means ~3×
+faster/cheaper inference with no accuracy loss for "is this a gym?" questions.
+
+| Model | Accuracy (6-case suite) | Avg latency (warm) | VRAM | Verdict |
+|---|---|---|---|---|
+| qwen2.5vl:7b @ full res | 5/6 | ~4 s | ~6 GB | baseline |
+| **qwen2.5vl:7b @ 512px** | **5/6** | **~1.1–1.5 s** | ~6 GB | ✅ recommended |
+| qwen2.5vl:3b @ 512px | 3/6 — rejects almost everything | ~1 s | ~3 GB | ❌ wrongly blocks users |
+| moondream 1.8B | n/a (Ollama pull failed; too weak for JSON verdicts) | — | — | ❌ |
+
+Going cheaper than the 7B costs accuracy in the direction that hurts most
+(false rejections block users). At ~1.1 s of GPU per check, 1 000 checks/day is
+~20 GPU-minutes — effectively free on the local card. If cloud is ever needed,
+gpt-4o-mini at 512px is ~$0.0005/check.
+
 ## Tuning
 
 - `AI_VERIFY_MIN_CONFIDENCE` (default 0.6): the model must be at least this

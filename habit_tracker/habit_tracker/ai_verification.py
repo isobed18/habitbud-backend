@@ -54,6 +54,23 @@ class AIVerdict:
         return {'verdict': self.verdict, 'confidence': self.confidence, 'reason': self.reason}
 
 
+def _downscale(raw_bytes, max_side=None):
+    """Shrink the photo before sending it to the model. Fewer vision tokens =
+    much faster + cheaper inference, and 512px is plenty for 'is this a gym?'.
+    Falls back to the original bytes if Pillow chokes."""
+    max_side = max_side or int(os.getenv('AI_VERIFY_IMAGE_SIZE', '512'))
+    try:
+        import io
+        from PIL import Image
+        img = Image.open(io.BytesIO(raw_bytes))
+        img.thumbnail((max_side, max_side))
+        buf = io.BytesIO()
+        img.convert('RGB').save(buf, 'JPEG', quality=80)
+        return buf.getvalue()
+    except Exception:
+        return raw_bytes
+
+
 def _parse_model_json(text):
     """Models sometimes wrap JSON in prose/fences — extract the first object."""
     start, end = text.find('{'), text.rfind('}')
@@ -116,8 +133,9 @@ def verify_check(image_file, habit_name) -> AIVerdict:
 
     try:
         image_file.seek(0)
-        image_b64 = base64.b64encode(image_file.read()).decode()
+        raw = image_file.read()
         image_file.seek(0)  # leave the file usable for the actual save
+        image_b64 = base64.b64encode(_downscale(raw)).decode()
 
         if provider == 'ollama':
             data = _verify_ollama(image_b64, habit_name, url, model, timeout)
