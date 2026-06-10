@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import auth_extras
 from friends.views import FriendListView
 from rest_framework_simplejwt.views import TokenRefreshView
 from challange.views import UserInventoryView
@@ -31,6 +32,12 @@ urlpatterns = [
     path('api/combos/', views.CombosView.as_view(), name='avatar-item-combos'),
     path('api/verify-purchase/', views.VerifyPurchaseView.as_view(), name='verify-purchase'),
     path('api/attach-tuning/', views.AttachTuningView.as_view(), name='attach-tuning'),
+
+    # Auth extensions: e-mail verification + social sign-in
+    path('api/email/send-verification/', auth_extras.SendEmailVerificationView.as_view(), name='email-send-verification'),
+    path('api/email/verify/', auth_extras.VerifyEmailView.as_view(), name='email-verify'),
+    path('api/auth/google/', auth_extras.GoogleAuthView.as_view(), name='auth-google'),
+    path('api/auth/apple/', auth_extras.AppleAuthView.as_view(), name='auth-apple'),
     path('api/buy-freeze/', views.BuyStreakFreezeView.as_view(), name='buy-freeze'),
 
     # Shortcuts
