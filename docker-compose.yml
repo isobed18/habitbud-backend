@@ -1,0 +1,49 @@
+# HabitBud backend — production-style stack: Django/Daphne + Postgres + Redis.
+# Usage:
+#   1) cp habit_tracker/.env.example .env   and fill SECRET_KEY etc.
+#   2) docker compose up -d --build
+# API at http://localhost:8000 (put nginx/Caddy with TLS in front for real prod).
+
+services:
+  web:
+    build: .
+    env_file: .env
+    environment:
+      DEBUG: "False"
+      DATABASE_URL: postgres://habitbud:${POSTGRES_PASSWORD:-habitbud}@db:5432/habitbud
+      REDIS_URL: redis://redis:6379/0
+      # TLS terminates at your reverse proxy; avoid redirect loops inside compose.
+      SECURE_SSL_REDIRECT: "False"
+    ports:
+      - "8000:8000"
+    volumes:
+      - media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: habitbud
+      POSTGRES_USER: habitbud
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-habitbud}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U habitbud"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:

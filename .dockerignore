@@ -1,0 +1,11 @@
+# Keep the image small and free of local state.
+habit_tracker/venv/
+habit_tracker/db.sqlite3
+habit_tracker/media/
+habit_tracker/static/
+habit_tracker/**/__pycache__/
+habit_tracker/assets/
+tools/
+.git/
+.env
+*.log

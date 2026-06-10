@@ -21,6 +21,13 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-CHANGE-ME-IN-PRODUCTION')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
+# Refuse to boot a production deployment with the placeholder secret.
+if not DEBUG and ('CHANGE-ME' in SECRET_KEY or SECRET_KEY.startswith('django-insecure')):
+    raise RuntimeError(
+        'Production (DEBUG=False) requires a real SECRET_KEY env var. '
+        "Generate one: python -c \"import secrets; print(secrets.token_urlsafe(50))\""
+    )
+
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 if DEBUG:
     ALLOWED_HOSTS = ['*']
@@ -109,6 +116,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
     'EXCEPTION_HANDLER': 'habit_tracker.exception_handler.custom_exception_handler',
+    # Brute-force / abuse protection. Anonymous covers login/register probing;
+    # per-user keeps a runaway client from hammering the API.
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('THROTTLE_ANON', '60/min'),
+        'user': os.getenv('THROTTLE_USER', '300/min'),
+    },
 }
 
 SIMPLE_JWT = {
@@ -226,16 +243,22 @@ SESSION_CACHE_ALIAS = 'default'
 
 ASGI_APPLICATION = 'habit_tracker.asgi.application'
 
-# Try Redis for channels, fall back to InMemory if Redis not available
-REDIS_AVAILABLE = os.getenv('REDIS_URL') or os.getenv('REDIS_HOST')
+# Redis for the channel layer when configured (REDIS_URL wins, else REDIS_HOST),
+# otherwise InMemory — fine for a single dev process, NOT for multi-worker prod.
+REDIS_URL = os.getenv('REDIS_URL')
 
-if REDIS_AVAILABLE:
+if REDIS_URL:
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                "hosts": [(REDIS_HOST, REDIS_PORT)],
-            },
+            'CONFIG': {'hosts': [REDIS_URL]},
+        },
+    }
+elif os.getenv('REDIS_HOST'):
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [(REDIS_HOST, REDIS_PORT)]},
         },
     }
 else:
