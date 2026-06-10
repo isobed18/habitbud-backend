@@ -8,8 +8,9 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'bio', 'xp', 'level', 'points', 'avatar',
-                  'avatar_config', 'region', 'is_private', 'message_privacy', 'streak_freezes')
-        read_only_fields = ('id', 'xp', 'level', 'points', 'streak_freezes')
+                  'avatar_config', 'region', 'is_private', 'message_privacy', 'streak_freezes',
+                  'is_paid')
+        read_only_fields = ('id', 'xp', 'level', 'points', 'streak_freezes', 'is_paid')
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])

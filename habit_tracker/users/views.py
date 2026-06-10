@@ -298,6 +298,50 @@ class AvatarModelListView(APIView):
         return Response(AvatarModelSerializer(qs, many=True, context={'request': request}).data)
 
 
+class VerifyPurchaseView(APIView):
+    """Verify a store purchase server-side and mark the user as paid.
+
+    POST body:
+      apple:  { "provider": "apple",  "receipt": "<base64 receipt>" }
+      google: { "provider": "google", "product_id": "...", "purchase_token": "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from django.utils import timezone
+        from .models import Purchase
+        from . import payments
+
+        provider = request.data.get('provider', '')
+        result = payments.verify(
+            provider,
+            receipt=request.data.get('receipt'),
+            product_id=request.data.get('product_id'),
+            purchase_token=request.data.get('purchase_token'),
+        )
+        if not result.ok:
+            return Response({'verified': False, 'error': result.error},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        purchase, _ = Purchase.objects.update_or_create(
+            transaction_id=result.transaction_id,
+            defaults={
+                'user': request.user,
+                'provider': provider,
+                'product_id': result.product_id or request.data.get('product_id', ''),
+                'status': 'verified',
+                'raw_response': result.raw,
+                'verified_at': timezone.now(),
+            },
+        )
+        if not request.user.is_paid:
+            request.user.is_paid = True
+            request.user.save(update_fields=['is_paid'])
+        return Response({'verified': True, 'is_paid': True,
+                         'product_id': purchase.product_id,
+                         'transaction_id': purchase.transaction_id})
+
+
 class CombosView(APIView):
     """Pre-baked combined avatar+item GLBs (media/models/combos/<avatar>__<item>.glb),
     used as preview/fallback. Returns a map { '<avatarbase>__<itemslug>': url }."""

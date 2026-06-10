@@ -183,6 +183,29 @@ class DeviceToken(models.Model):
         return f"{self.user.username} · {self.platform} · {self.token[:20]}…"
 
 
+class Purchase(models.Model):
+    """A store purchase verified server-side (App Store / Google Play).
+    A verified purchase flips user.is_paid. Receipts are kept for audits."""
+    PROVIDER_CHOICES = [('apple', 'App Store'), ('google', 'Google Play')]
+    STATUS_CHOICES = [('pending', 'Pending'), ('verified', 'Verified'), ('rejected', 'Rejected')]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='purchases')
+    provider = models.CharField(max_length=10, choices=PROVIDER_CHOICES)
+    product_id = models.CharField(max_length=120)
+    transaction_id = models.CharField(max_length=200, unique=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    raw_response = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} · {self.provider} · {self.product_id} ({self.status})"
+
+
 class StreakFreezeUsage(models.Model):
     """Tracks which days a user froze their streak."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
