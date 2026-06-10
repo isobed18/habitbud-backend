@@ -66,7 +66,7 @@ faster/cheaper inference with no accuracy loss for "is this a gym?" questions.
 | qwen2.5vl:7b @ full res | 5/6 | ~4 s | ~6 GB | baseline |
 | **qwen2.5vl:7b @ 512px** | **5/6** | **~1.1–1.5 s** | ~6 GB | ✅ recommended |
 | qwen2.5vl:3b @ 512px | 3/6 — rejects almost everything | ~1 s | ~3 GB | ❌ wrongly blocks users |
-| moondream 1.8B | n/a (Ollama pull failed; too weak for JSON verdicts) | — | — | ❌ |
+| moondream 1.8B @ 512px | 3/6 — coin-flip verdicts, empty reasons | ~0.3–0.5 s | ~2 GB | ❌ fast but unreliable |
 
 Going cheaper than the 7B costs accuracy in the direction that hurts most
 (false rejections block users). At ~1.1 s of GPU per check, 1 000 checks/day is
