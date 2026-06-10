@@ -25,6 +25,11 @@
     "round_glasses":   { "fit_ratio": 0.38, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] }
   },
 
+  "_overrides_comment": "Per-avatar fixes. You fix ONE (avatar, item) pair once — hand and head attach to independent sockets, so every hand-fix combines with every head-fix automatically (10 hand + 2 head fixes = all 20 combos). Write entries by hand or with tools/rig/extract_offset.py from Blender. Most-specific wins: avatar_overrides > socket_tuning[item] > _default.",
+  "avatar_overrides": {
+    "_example_fox": { "magic_wand": { "loc": [0, 0, 0.02], "rot_deg": [0, 0, 15], "scale": 1.1 } }
+  },
+
   "bone": {
     "_default":     { "fit": 0.35, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
     "magic_wand":   { "fit": 0.45, "rot_deg": [90, 0, 0],  "loc": [0, 0.05, 0] },

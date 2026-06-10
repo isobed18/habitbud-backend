@@ -298,6 +298,33 @@ class AvatarModelListView(APIView):
         return Response(AvatarModelSerializer(qs, many=True, context={'request': request}).data)
 
 
+class AttachTuningView(APIView):
+    """Item placement tuning for the runtime 3D dress-up: socket lists, per-item
+    defaults and per-(avatar,item) fixes. Published by `import_attach_tuning`."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import json
+        import os
+        from django.conf import settings
+        from django.core.cache import cache
+        data = cache.get('attach_tuning')
+        if data is None:
+            path = os.path.join(settings.MEDIA_ROOT, 'models', 'attach_tuning.json')
+            data = {}
+            if os.path.isfile(path):
+                with open(path, encoding='utf-8') as f:
+                    raw = json.load(f)
+                data = {
+                    'sockets': raw.get('sockets', {}),
+                    'socket_tuning': raw.get('socket_tuning', {}),
+                    'avatar_overrides': {k: v for k, v in raw.get('avatar_overrides', {}).items()
+                                         if not k.startswith('_')},
+                }
+            cache.set('attach_tuning', data, 300)
+        return Response(data)
+
+
 class VerifyPurchaseView(APIView):
     """Verify a store purchase server-side and mark the user as paid.
 

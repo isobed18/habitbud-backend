@@ -54,6 +54,20 @@ daily 18:00:   habit_tracker\venv\Scripts\python.exe manage.py send_check_remind
 ```
 (working directory: `habit_tracker\`)
 
+## Ollama: parallel AI verification on the 3090
+
+One 7B vision model uses ~6 GB of the 24 GB card, so parallel requests are free
+throughput. Set these (System Properties → Environment Variables, or before
+starting Ollama) and restart the Ollama service:
+
+```
+OLLAMA_NUM_PARALLEL=4        # 4 concurrent requests to the same model (~3-4 checks/s)
+OLLAMA_MAX_LOADED_MODELS=2   # keep e.g. qwen2.5vl:7b + another model resident
+OLLAMA_KEEP_ALIVE=24h        # don't unload the model between checks
+```
+
+Django side needs nothing — concurrent /verify calls just fan out to Ollama.
+
 ## Health check
 
 ```

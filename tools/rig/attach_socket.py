@@ -105,6 +105,10 @@ def main():
     tuning = cfg.get('socket_tuning', {})
     s = dict(tuning.get('_default', {}))
     s.update(tuning.get(key, {}))
+    # Per-avatar fix (from extract_offset.py) wins over the generic item tuning.
+    import re as _re
+    avatar_base = _re.sub(r'[^a-z]', '', os.path.splitext(os.path.basename(args.avatar))[0].lower().replace('socketed', ''))
+    s.update(cfg.get('avatar_overrides', {}).get(avatar_base, {}).get(key, {}))
     fit_ratio = args.fit_ratio if args.fit_ratio is not None else s.get('fit_ratio', 1.6)
     scale     = args.scale     if args.scale     is not None else s.get('scale', 1.0)
     loc       = args.loc       if args.loc       is not None else s.get('loc', [0, 0, 0])
