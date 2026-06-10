@@ -7,7 +7,9 @@
 services:
   web:
     build: .
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false   # compose parses without it; web still refuses to boot without SECRET_KEY
     environment:
       DEBUG: "False"
       DATABASE_URL: postgres://habitbud:${POSTGRES_PASSWORD:-habitbud}@db:5432/habitbud
