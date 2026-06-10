@@ -327,7 +327,18 @@ class ProofSubmissionView(APIView):
         if not habit.is_completed_today():
             return Response({'error': 'Habit must be completed before submitting proof.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        
+        # 0. Optional AI pre-verification: "AI verifies first, then friends."
+        # Env-gated (AI_VERIFY_PROVIDER=off by default) and fail-open, so the
+        # social flow is untouched unless AI confidently rejects the photo.
+        from habit_tracker.ai_verification import verify_check
+        ai = verify_check(proof_image, habit.name)
+        if not ai.ok:
+            return Response(
+                {'error': 'Check fotoğrafı doğrulanamadı. Lütfen alışkanlığını gösteren net bir fotoğraf çek.',
+                 'ai': ai.as_dict()},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
         # 1. Resolve Conversation (Social Only)
         if conversation_id:
             conversation = get_object_or_404(Conversation, id=conversation_id)
@@ -376,6 +387,7 @@ class ProofSubmissionView(APIView):
             {
                 **ChatMessageSerializer(proof_message).data,
                 'xp_earned': GamificationEngine.BASE_SUBMIT_XP,
+                'ai': ai.as_dict(),
             },
             status=status.HTTP_201_CREATED,
         )
