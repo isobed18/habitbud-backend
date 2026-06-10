@@ -1,0 +1,60 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [production-ready, main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: habit_tracker/requirements.txt
+
+      - name: Install dependencies
+        working-directory: habit_tracker
+        run: pip install -r requirements.txt
+
+      - name: Django system check (deploy profile)
+        working-directory: habit_tracker
+        env:
+          DEBUG: 'False'
+          SECRET_KEY: ci-only-secret-key-not-used-anywhere-real-1234567890
+          ALLOWED_HOSTS: ci.example.com
+        run: python manage.py check --deploy
+
+      - name: Migration drift guard
+        working-directory: habit_tracker
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Migrate + API smoke test
+        working-directory: habit_tracker
+        run: |
+          python manage.py migrate --noinput
+          python manage.py shell -c "
+          from django.test import Client
+          import json
+          c = Client()
+          assert c.get('/api/health/').status_code == 200, 'health failed'
+          r = c.post('/users/api/register/', json.dumps({'username':'ci','email':'ci@ci.com','password':'Ci!pass123','password2':'Ci!pass123'}), content_type='application/json')
+          assert r.status_code == 201, f'register failed: {r.status_code} {r.content[:200]}'
+          tok = r.json()['access']
+          H = {'HTTP_AUTHORIZATION': f'Bearer {tok}'}
+          for ep in ['/users/api/profile/','/users/api/avatar-models/','/users/api/combos/','/users/items/','/habits/templates/','/users/api/stats/','/users/api/attach-tuning/']:
+              s = c.get(ep, **H).status_code
+              assert s == 200, f'{ep} -> {s}'
+          print('smoke OK')
+          "
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -t habitbud-backend:ci .

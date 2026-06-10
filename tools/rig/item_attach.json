@@ -1,42 +1,490 @@
 {
   "_comment": "Attachment config. 'sockets' maps each socket Empty name -> the items that go on it. 'socket_tuning' holds per-item scale/offset for SOCKET mode (fit_ratio = item max dim as a fraction of the avatar size, avatar ~2 units; loc/rot_deg are socket-relative). 'bone' holds tuning for BONE mode (rigged skeletons). Add/remove items by editing the socket lists; add new sockets (e.g. socket_l) freely.",
-
   "sockets": {
-    "socket_r":    ["magic_wand", "dumbell", "coffee_mug", "water_bottle", "book", "balloons"],
-    "socket_head": ["beanie", "cap", "crown", "face_mask", "pink_headphones", "pink_sunglasses", "round_glasses"]
+    "socket_r": [
+      "magic_wand",
+      "dumbell",
+      "coffee_mug",
+      "water_bottle",
+      "book",
+      "balloons"
+    ],
+    "socket_head": [
+      "beanie",
+      "cap",
+      "crown",
+      "face_mask",
+      "pink_headphones",
+      "pink_sunglasses",
+      "round_glasses"
+    ]
   },
-
   "socket_tuning": {
-    "_default":        { "fit_ratio": 0.22, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
-
-    "magic_wand":      { "fit_ratio": 0.32, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.04] },
-    "coffee_mug":      { "fit_ratio": 0.19, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "dumbell":         { "fit_ratio": 0.23, "rot_deg": [0, 0, 90], "loc": [0, 0, 0] },
-    "water_bottle":    { "fit_ratio": 0.26, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.02] },
-    "book":            { "fit_ratio": 0.24, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "balloons":        { "fit_ratio": 0.45, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0.10] },
-
-    "beanie":          { "fit_ratio": 0.45, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "cap":             { "fit_ratio": 0.45, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "crown":           { "fit_ratio": 0.40, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "face_mask":       { "fit_ratio": 0.40, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "pink_headphones": { "fit_ratio": 0.50, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "pink_sunglasses": { "fit_ratio": 0.40, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] },
-    "round_glasses":   { "fit_ratio": 0.38, "rot_deg": [0, 0, 0],  "loc": [0, 0, 0] }
+    "_default": {
+      "fit_ratio": 0.22,
+      "scale": 1.0,
+      "loc": [
+        0,
+        0,
+        0
+      ],
+      "rot_deg": [
+        0,
+        0,
+        0
+      ]
+    },
+    "magic_wand": {
+      "fit_ratio": 0.32,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0.04
+      ]
+    },
+    "coffee_mug": {
+      "fit_ratio": 0.19,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "dumbell": {
+      "fit_ratio": 0.23,
+      "rot_deg": [
+        0,
+        0,
+        90
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "water_bottle": {
+      "fit_ratio": 0.26,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0.02
+      ]
+    },
+    "book": {
+      "fit_ratio": 0.24,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "balloons": {
+      "fit_ratio": 0.45,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0.1
+      ]
+    },
+    "beanie": {
+      "fit_ratio": 0.45,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "cap": {
+      "fit_ratio": 0.45,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "crown": {
+      "fit_ratio": 0.4,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "face_mask": {
+      "fit_ratio": 0.4,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "pink_headphones": {
+      "fit_ratio": 0.5,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "pink_sunglasses": {
+      "fit_ratio": 0.4,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    },
+    "round_glasses": {
+      "fit_ratio": 0.38,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0,
+        0
+      ]
+    }
   },
-
   "_overrides_comment": "Per-avatar fixes. You fix ONE (avatar, item) pair once — hand and head attach to independent sockets, so every hand-fix combines with every head-fix automatically (10 hand + 2 head fixes = all 20 combos). Write entries by hand or with tools/rig/extract_offset.py from Blender. Most-specific wins: avatar_overrides > socket_tuning[item] > _default.",
   "avatar_overrides": {
-    "_example_fox": { "magic_wand": { "loc": [0, 0, 0.02], "rot_deg": [0, 0, 15], "scale": 1.1 } }
+    "_example_fox": {
+      "magic_wand": {
+        "loc": [
+          0,
+          0,
+          0.02
+        ],
+        "rot_deg": [
+          0,
+          0,
+          15
+        ],
+        "scale": 1.1
+      }
+    },
+    "pinkcat": {
+      "round_glasses": {
+        "loc": [
+          -0.0144,
+          -0.165,
+          -0.4036
+        ],
+        "rot_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ],
+        "scale": 0.4243
+      },
+      "pink_sunglasses": {
+        "loc": [
+          -0.0147,
+          -0.3585,
+          -0.413
+        ],
+        "rot_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ],
+        "scale": 0.3995
+      },
+      "pink_headphones": {
+        "loc": [
+          -0.0086,
+          -0.0131,
+          -0.1609
+        ],
+        "rot_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ],
+        "scale": 0.6549
+      },
+      "face_mask": {
+        "loc": [
+          -0.015,
+          -0.2798,
+          -0.3936
+        ],
+        "rot_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ],
+        "scale": 0.6156
+      },
+      "cap": {
+        "loc": [
+          0.0,
+          -0.1293,
+          0.0914
+        ],
+        "rot_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ],
+        "scale": 0.4506
+      },
+      "crown": {
+        "loc": [
+          0.006,
+          -0.0229,
+          0.159
+        ],
+        "rot_deg": [
+          0.0,
+          -0.0,
+          0.0
+        ],
+        "scale": 0.4001
+      },
+      "beanie": {
+        "loc": [
+          -0.019,
+          0.0792,
+          0.1685
+        ],
+        "rot_deg": [
+          -11.47,
+          -1.12,
+          4.02
+        ],
+        "scale": 0.4736
+      },
+      "balloons": {
+        "loc": [
+          -0.3564,
+          -0.2057,
+          0.1769
+        ],
+        "rot_deg": [
+          4.59,
+          71.59,
+          -141.72
+        ],
+        "scale": 0.4502
+      },
+      "book": {
+        "loc": [
+          -0.0928,
+          -0.1756,
+          0.0721
+        ],
+        "rot_deg": [
+          -8.38,
+          -63.97,
+          3.32
+        ],
+        "scale": 0.1914
+      },
+      "water_bottle": {
+        "loc": [
+          -0.1437,
+          -0.1703,
+          0.0055
+        ],
+        "rot_deg": [
+          2.33,
+          -38.0,
+          37.51
+        ],
+        "scale": 0.2599
+      },
+      "coffee_mug": {
+        "loc": [
+          -0.1974,
+          -0.1552,
+          0.0077
+        ],
+        "rot_deg": [
+          -14.83,
+          -18.47,
+          28.9
+        ],
+        "scale": 0.19
+      },
+      "dumbell": {
+        "loc": [
+          -0.0012,
+          0.0428,
+          -0.0657
+        ],
+        "rot_deg": [
+          119.08,
+          -14.64,
+          67.78
+        ],
+        "scale": 0.265
+      },
+      "magic_wand": {
+        "loc": [
+          -0.1695,
+          -0.2953,
+          0.3351
+        ],
+        "rot_deg": [
+          63.96,
+          -59.67,
+          -3.81
+        ],
+        "scale": 0.3206
+      }
+    }
   },
-
   "bone": {
-    "_default":     { "fit": 0.35, "scale": 1.0, "loc": [0, 0, 0], "rot_deg": [0, 0, 0] },
-    "magic_wand":   { "fit": 0.45, "rot_deg": [90, 0, 0],  "loc": [0, 0.05, 0] },
-    "dumbell":      { "fit": 0.40, "rot_deg": [0, 90, 0],  "loc": [0, 0.02, 0] },
-    "coffee_mug":   { "fit": 0.28, "rot_deg": [0, 0, 0],   "loc": [0, 0.03, 0] },
-    "water_bottle": { "fit": 0.40, "rot_deg": [0, 0, 0],   "loc": [0, 0.04, 0] },
-    "book":         { "fit": 0.40, "rot_deg": [0, 0, 0],   "loc": [0, 0.03, 0] },
-    "balloons":     { "fit": 0.70, "rot_deg": [0, 0, 0],   "loc": [0, 0.30, 0] }
+    "_default": {
+      "fit": 0.35,
+      "scale": 1.0,
+      "loc": [
+        0,
+        0,
+        0
+      ],
+      "rot_deg": [
+        0,
+        0,
+        0
+      ]
+    },
+    "magic_wand": {
+      "fit": 0.45,
+      "rot_deg": [
+        90,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0.05,
+        0
+      ]
+    },
+    "dumbell": {
+      "fit": 0.4,
+      "rot_deg": [
+        0,
+        90,
+        0
+      ],
+      "loc": [
+        0,
+        0.02,
+        0
+      ]
+    },
+    "coffee_mug": {
+      "fit": 0.28,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0.03,
+        0
+      ]
+    },
+    "water_bottle": {
+      "fit": 0.4,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0.04,
+        0
+      ]
+    },
+    "book": {
+      "fit": 0.4,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0.03,
+        0
+      ]
+    },
+    "balloons": {
+      "fit": 0.7,
+      "rot_deg": [
+        0,
+        0,
+        0
+      ],
+      "loc": [
+        0,
+        0.3,
+        0
+      ]
+    }
   }
 }
