@@ -21,12 +21,51 @@ param(
     [string[]] $Items,                                          # default: each socket's full item list
     [string[]] $Avatars,                                        # default: every .glb in AvatarsDir
     [switch]   $Force,                                          # overwrite existing outputs
+    [switch]   $Help,                                           # print usage and exit
     [string]   $AvatarsDir = 'D:\blenderprojects\gen\avatars_socketed',
     [string]   $ItemsDir   = 'D:\blenderprojects\gen\items',
     [string]   $OutDir     = 'D:\blenderprojects\gen\out',
     [string]   $Blender    = 'D:\Blender Foundation\Blender 5.1\blender.exe'
 )
 $ErrorActionPreference = 'Stop'
+
+if ($Help) {
+@'
+attach_all.ps1 - bake combined avatar+item GLBs (one or many combinations).
+
+YOU USUALLY DON'T NEED THE COMBINED GLBs FOR THE APP - the app composes
+avatar+item live from the socket + tuning JSON. Use this only to (a) preview a
+combo in a glTF viewer, or (b) re-fix an item in Blender (open one combo, adjust,
+run extract_offset.py). So you almost always want ONE avatar + ONE item:
+
+  # ONE combo (fast - no 91-combo wait):
+  tools\rig\attach_all.ps1 -Avatars pinkcat -Items magic_wand -Force
+
+  # one avatar, all its hand items:
+  tools\rig\attach_all.ps1 -Avatars pinkcat -Sockets socket_r -Force
+
+  # everything (all avatars x all items) - slow:
+  tools\rig\attach_all.ps1 -Force
+
+FILTERS (combine freely):
+  -Avatars  fox,pinkcat       only these avatars   (matches <name>_socketed.glb)
+  -Items    magic_wand,cap    only these items
+  -Sockets  socket_r          socket_r=hand, socket_head=head (default: both)
+  -Force                      overwrite existing outputs (default: keep them)
+
+PATHS (defaults shown):
+  -AvatarsDir D:\blenderprojects\gen\avatars_socketed
+  -ItemsDir   D:\blenderprojects\gen\items
+  -OutDir     D:\blenderprojects\gen\out
+
+AFTER FIXING IN BLENDER (the per-(avatar,item) tuning loop):
+  1) open D:\blenderprojects\gen\out\<avatar>__<item>.glb, move the item
+  2) Scripting tab -> run tools\rig\extract_offset.py (set AVATAR/ITEM at top)
+  3) cd habit_tracker; venv\Scripts\python manage.py import_attach_tuning
+  4) reload the app - that one (avatar,item) is fixed everywhere it appears.
+'@ | Write-Host
+    exit 0
+}
 $script = Join-Path $PSScriptRoot 'attach_socket.py'
 $config = Join-Path $PSScriptRoot 'item_attach.json'
 
