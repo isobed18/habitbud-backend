@@ -108,7 +108,9 @@ def main():
     # Per-avatar fix (from extract_offset.py) wins over the generic item tuning.
     import re as _re
     avatar_base = _re.sub(r'[^a-z]', '', os.path.splitext(os.path.basename(args.avatar))[0].lower().replace('socketed', ''))
-    s.update(cfg.get('avatar_overrides', {}).get(avatar_base, {}).get(key, {}))
+    override = cfg.get('avatar_overrides', {}).get(avatar_base, {}).get(key)
+    if override:
+        s.update(override)
     fit_ratio = args.fit_ratio if args.fit_ratio is not None else s.get('fit_ratio', 1.6)
     scale     = args.scale     if args.scale     is not None else s.get('scale', 1.0)
     loc       = args.loc       if args.loc       is not None else s.get('loc', [0, 0, 0])
@@ -131,8 +133,15 @@ def main():
     print(f'item: {args.item}  (config key: {key})')
     item = consolidate_item(import_glb(args.item))
 
-    target = avatar_dim * fit_ratio * scale
-    base = target / (max(item.dimensions) or 1.0)
+    # A per-avatar override (extract_offset.py) carries the item's ABSOLUTE
+    # socket-space scale — apply it directly. Otherwise size by the avatar-relative
+    # fit_ratio heuristic. (This keeps the Blender re-fix loop stable: opening a
+    # combo shows the item already at the size you set, not re-shrunk.)
+    if override:
+        base = scale
+    else:
+        target = avatar_dim * fit_ratio * scale
+        base = target / (max(item.dimensions) or 1.0)
     item.scale = (base, base, base)
     bpy.context.view_layer.update()
 
@@ -144,8 +153,8 @@ def main():
     item.location = Vector(loc)
     item.rotation_mode = 'XYZ'
     item.rotation_euler = Euler([math.radians(a) for a in rot], 'XYZ')
-    print(f'  placed: fit_ratio={fit_ratio} scale={scale} -> max_dim={target:.3f} '
-          f'(s={base:.4f}) loc={loc} rot_deg={rot}')
+    mode = 'override(abs)' if override else f'fit_ratio={fit_ratio}'
+    print(f'  placed: {mode} -> item.scale={base:.4f} loc={loc} rot_deg={rot}')
 
     # Keep only the socket's avatar hierarchy + item; drop stray meshes/empties.
     keep = {socket, item}
