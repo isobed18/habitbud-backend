@@ -145,16 +145,27 @@ def main():
     item.scale = (base, base, base)
     bpy.context.view_layer.update()
 
-    # Parent to the socket: item origin lands on the socket origin, inheriting
-    # the socket's world position + orientation. Offsets are socket-relative.
+    # Parent to the socket: item local transform = rel (socket-relative).
     item.parent = socket
     item.parent_type = 'OBJECT'
     item.matrix_parent_inverse = Matrix()
-    item.location = Vector(loc)
-    item.rotation_mode = 'XYZ'
-    item.rotation_euler = Euler([math.radians(a) for a in rot], 'XYZ')
-    mode = 'override(abs)' if override else f'fit_ratio={fit_ratio}'
-    print(f'  placed: {mode} -> item.scale={base:.4f} loc={loc} rot_deg={rot}')
+    if override and 'quat' in override:
+        # Override stores the transform in glTF/Y-up as a quaternion. Convert
+        # back to Blender Z-up (C⁻¹·rel_g·C) so the combo matches the app.
+        from mathutils import Quaternion
+        C = Matrix.Rotation(math.radians(-90), 4, 'X')
+        q = override['quat']                            # [x,y,z,w]
+        rel_g = (Matrix.Translation(Vector(loc))
+                 @ Quaternion((q[3], q[0], q[1], q[2])).to_matrix().to_4x4()
+                 @ Matrix.Diagonal((base, base, base, 1.0)))
+        item.matrix_basis = C.inverted() @ rel_g @ C
+        mode = 'override(quat)'
+    else:
+        item.location = Vector(loc)
+        item.rotation_mode = 'XYZ'
+        item.rotation_euler = Euler([math.radians(a) for a in rot], 'XYZ')
+        mode = 'override(abs)' if override else f'fit_ratio={fit_ratio}'
+    print(f'  placed: {mode} -> item.scale={base:.4f}')
 
     # Keep only the socket's avatar hierarchy + item; drop stray meshes/empties.
     keep = {socket, item}

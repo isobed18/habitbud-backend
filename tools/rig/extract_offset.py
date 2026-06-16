@@ -48,24 +48,33 @@ def main():
         raise RuntimeError('Select the ITEM mesh first.')
     socket = find_socket(item)
 
+    from mathutils import Matrix
     bpy.context.view_layer.update()
     sw = socket.matrix_world
     iw = item.matrix_world
-    rel = sw.inverted() @ iw                 # item transform in socket space
+    rel = sw.inverted() @ iw                 # item transform in socket space (Blender Z-up)
 
-    loc = [round(v, 4) for v in rel.to_translation()]
-    rot = [round(math.degrees(a), 2) for a in rel.to_euler('XYZ')]
-    scale = round(sum(rel.to_scale()) / 3.0, 4)   # uniform-ish
+    # Convert Blender Z-up -> glTF/three.js Y-up (the app's frame) ONCE, here, so
+    # the app applies values verbatim. C = Rx(-90); rel_g = C · rel · C⁻¹.
+    # Store rotation as a QUATERNION (convention-free — euler order differs
+    # between Blender and three.js and was the source of wrong rotations).
+    C = Matrix.Rotation(math.radians(-90), 4, 'X')
+    relg = C @ rel @ C.inverted()
+    L = relg.to_translation()
+    Q = relg.to_quaternion()                 # mathutils order (w, x, y, z)
+    loc = [round(L.x, 4), round(L.y, 4), round(L.z, 4)]
+    quat = [round(Q.x, 5), round(Q.y, 5), round(Q.z, 5), round(Q.w, 5)]  # three.js [x,y,z,w]
+    scale = round(sum(relg.to_scale()) / 3.0, 4)
 
     with open(CONFIG, 'r', encoding='utf-8') as f:
         cfg = json.load(f)
     cfg.setdefault('avatar_overrides', {}).setdefault(AVATAR, {})[ITEM] = {
-        'loc': loc, 'rot_deg': rot, 'scale': scale,
+        'loc': loc, 'quat': quat, 'scale': scale,
     }
     with open(CONFIG, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
 
-    print(f'[extract_offset] saved {AVATAR}/{ITEM}: loc={loc} rot={rot} scale={scale}')
+    print(f'[extract_offset] saved {AVATAR}/{ITEM}: loc={loc} quat={quat} scale={scale}')
     print(f'[extract_offset] -> {CONFIG}')
 
 
